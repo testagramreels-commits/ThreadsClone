@@ -1,26 +1,43 @@
-import { Header } from '@/components/layout/Header';
-import { CreateThread } from '@/components/features/CreateThread';
-import { ThreadCard } from '@/components/features/ThreadCard';
-import { BottomNav } from '@/components/features/BottomNav';
-import { mockThreads } from '@/data/mockThreads';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { LoginPage } from '@/pages/LoginPage';
+import { HomePage } from '@/pages/HomePage';
+import { Toaster } from '@/components/ui/toaster';
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function App() {
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container max-w-2xl mx-auto pb-20 md:pb-4">
-        <CreateThread />
-        
-        <div className="divide-y">
-          {mockThreads.map((thread) => (
-            <ThreadCard key={thread.id} thread={thread} />
-          ))}
-        </div>
-      </main>
-      
-      <BottomNav />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+      <Toaster />
+    </BrowserRouter>
   );
 }
 

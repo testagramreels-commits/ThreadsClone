@@ -1,39 +1,55 @@
 import { useState } from 'react';
 import { Heart, MessageCircle, Repeat2, Send, MoreHorizontal } from 'lucide-react';
-import { Thread } from '@/types/thread';
+import { Thread } from '@/types/database';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
+import { toggleThreadLike } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 interface ThreadCardProps {
   thread: Thread;
 }
 
 export function ThreadCard({ thread }: ThreadCardProps) {
-  const [isLiked, setIsLiked] = useState(thread.isLiked || false);
-  const [likes, setLikes] = useState(thread.likes);
+  const [isLiked, setIsLiked] = useState(thread.is_liked || false);
+  const [likes, setLikes] = useState(thread.likes_count || 0);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikes(isLiked ? likes - 1 : likes + 1);
+  const handleLike = async () => {
+    setLoading(true);
+    try {
+      const liked = await toggleThreadLike(thread.id);
+      setIsLiked(liked);
+      setLikes(liked ? likes + 1 : likes - 1);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <article className="border-b p-4 hover:bg-accent/50 transition-colors animate-fade-in">
       <div className="flex gap-3">
         <Avatar className="h-10 w-10 ring-2 ring-background">
-          <AvatarImage src={thread.user.avatar} />
-          <AvatarFallback>{thread.user.name[0]}</AvatarFallback>
+          <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${thread.user?.username}`} />
+          <AvatarFallback>{thread.user?.username?.[0]?.toUpperCase()}</AvatarFallback>
         </Avatar>
         
         <div className="flex-1 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">{thread.user.name}</span>
-              <span className="text-muted-foreground text-sm">@{thread.user.username}</span>
+              <span className="font-semibold text-sm">{thread.user?.username}</span>
+              <span className="text-muted-foreground text-sm">@{thread.user?.username}</span>
               <span className="text-muted-foreground text-sm">·</span>
               <span className="text-muted-foreground text-sm">
-                {formatDistanceToNow(new Date(thread.timestamp), { addSuffix: true })}
+                {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
               </span>
             </div>
             
@@ -44,9 +60,9 @@ export function ThreadCard({ thread }: ThreadCardProps) {
           
           <p className="text-base leading-relaxed whitespace-pre-wrap">{thread.content}</p>
           
-          {thread.image && (
+          {thread.image_url && (
             <img 
-              src={thread.image} 
+              src={thread.image_url} 
               alt="Thread image" 
               className="rounded-xl w-full max-h-96 object-cover mt-3"
             />
@@ -57,6 +73,7 @@ export function ThreadCard({ thread }: ThreadCardProps) {
               variant="ghost"
               size="sm"
               onClick={handleLike}
+              disabled={loading}
               className={`gap-2 hover:text-red-500 transition-colors ${
                 isLiked ? 'text-red-500' : 'text-muted-foreground'
               }`}
@@ -67,12 +84,12 @@ export function ThreadCard({ thread }: ThreadCardProps) {
             
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
               <MessageCircle className="h-5 w-5" />
-              <span className="text-sm">{thread.replies}</span>
+              <span className="text-sm">{thread.replies_count || 0}</span>
             </Button>
             
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
               <Repeat2 className="h-5 w-5" />
-              <span className="text-sm">{thread.reposts}</span>
+              <span className="text-sm">0</span>
             </Button>
             
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">

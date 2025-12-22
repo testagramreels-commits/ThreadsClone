@@ -3,27 +3,54 @@ import { Image, Smile } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAuth } from '@/hooks/useAuth';
+import { createThread } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
-export function CreateThread() {
+interface CreateThreadProps {
+  onThreadCreated?: () => void;
+}
+
+export function CreateThread({ onThreadCreated }: CreateThreadProps) {
   const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  const handlePost = () => {
-    if (!content.trim()) return;
-    console.log('Posting thread:', content);
-    setContent('');
+  const handlePost = async () => {
+    if (!content.trim() || !user) return;
+    
+    setLoading(true);
+    try {
+      await createThread(content);
+      setContent('');
+      toast({
+        title: 'Thread posted!',
+        description: 'Your thread has been shared.',
+      });
+      onThreadCreated?.();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="border-b p-4 animate-fade-in">
       <div className="flex gap-3">
         <Avatar className="h-10 w-10">
-          <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=You" />
-          <AvatarFallback>ME</AvatarFallback>
+          <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`} />
+          <AvatarFallback>{user?.username?.[0]?.toUpperCase()}</AvatarFallback>
         </Avatar>
         
         <div className="flex-1 space-y-3">
           <div className="space-y-2">
-            <p className="text-sm font-semibold">Your Name</p>
+            <p className="text-sm font-semibold">{user?.username || 'Guest'}</p>
             <Textarea
               placeholder="Start a thread..."
               value={content}
@@ -44,10 +71,10 @@ export function CreateThread() {
             
             <Button 
               onClick={handlePost}
-              disabled={!content.trim()}
+              disabled={!content.trim() || loading}
               className="rounded-full px-6"
             >
-              Post
+              {loading ? 'Posting...' : 'Post'}
             </Button>
           </div>
         </div>
