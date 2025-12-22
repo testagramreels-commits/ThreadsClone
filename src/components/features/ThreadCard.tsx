@@ -6,16 +6,19 @@ import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { toggleThreadLike } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface ThreadCardProps {
   thread: Thread;
+  isDetailView?: boolean;
 }
 
-export function ThreadCard({ thread }: ThreadCardProps) {
+export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
   const [isLiked, setIsLiked] = useState(thread.is_liked || false);
   const [likes, setLikes] = useState(thread.likes_count || 0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleLike = async () => {
     setLoading(true);
@@ -34,18 +37,46 @@ export function ThreadCard({ thread }: ThreadCardProps) {
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a')) return;
+    if (!isDetailView) {
+      navigate(`/thread/${thread.id}`);
+    }
+  };
+
   return (
-    <article className="border-b p-4 hover:bg-accent/50 transition-colors animate-fade-in">
+    <article 
+      className={`border-b p-4 transition-colors animate-fade-in ${
+        !isDetailView ? 'hover:bg-accent/50 cursor-pointer' : ''
+      }`}
+      onClick={handleCardClick}
+    >
       <div className="flex gap-3">
-        <Avatar className="h-10 w-10 ring-2 ring-background">
-          <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${thread.user?.username}`} />
+        <Avatar 
+          className="h-10 w-10 ring-2 ring-background cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/profile/${thread.user?.username}`);
+          }}
+        >
+          <AvatarImage src={thread.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${thread.user?.username}`} />
           <AvatarFallback>{thread.user?.username?.[0]?.toUpperCase()}</AvatarFallback>
         </Avatar>
         
         <div className="flex-1 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">{thread.user?.username}</span>
+              <span 
+                className="font-semibold text-sm cursor-pointer hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/profile/${thread.user?.username}`);
+                }}
+              >
+                {thread.user?.username}
+              </span>
               <span className="text-muted-foreground text-sm">@{thread.user?.username}</span>
               <span className="text-muted-foreground text-sm">·</span>
               <span className="text-muted-foreground text-sm">

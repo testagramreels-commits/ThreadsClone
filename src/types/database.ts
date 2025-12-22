@@ -2,6 +2,11 @@ export interface UserProfile {
   id: string;
   username: string;
   email: string;
+  avatar_url?: string;
+  bio?: string;
+  website?: string;
+  location?: string;
+  created_at?: string;
 }
 
 export interface Thread {

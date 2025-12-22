@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { LoginPage } from '@/pages/LoginPage';
 import { HomePage } from '@/pages/HomePage';
+import { ProfilePage } from '@/pages/ProfilePage';
+import { ThreadDetailPage } from '@/pages/ThreadDetailPage';
 import { Toaster } from '@/components/ui/toaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,6 +34,22 @@ function App() {
           element={
             <ProtectedRoute>
               <HomePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/:username"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/thread/:threadId"
+          element={
+            <ProtectedRoute>
+              <ThreadDetailPage />
             </ProtectedRoute>
           }
         />
