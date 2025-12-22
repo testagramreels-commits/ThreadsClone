@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { ThreadContent } from './ThreadContent';
 
 interface ReplyCardProps {
   reply: ThreadReply;
@@ -44,7 +45,7 @@ export function ReplyCard({ reply }: ReplyCardProps) {
             </Button>
           </div>
 
-          <p className="text-base leading-relaxed whitespace-pre-wrap">{reply.content}</p>
+          <ThreadContent content={reply.content} />
 
           <div className="flex items-center gap-1 pt-2">
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-red-500">

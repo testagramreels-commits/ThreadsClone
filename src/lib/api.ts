@@ -245,3 +245,145 @@ export async function getThreadReplies(threadId: string) {
   if (error) throw error;
   return data as ThreadReply[];
 }
+
+export async function uploadImage(file: File, bucket: 'thread-images' | 'avatars'): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be logged in to upload images');
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+}
+
+export async function updateUserProfile(updates: Partial<UserProfile>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be logged in to update profile');
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .update(updates)
+    .eq('id', user.id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as UserProfile;
+}
+
+export async function searchThreads(query: string) {
+  const { data, error } = await supabase
+    .from('threads')
+    .select(`
+      *,
+      user:user_profiles(id, username, email, avatar_url)
+    `)
+    .or(`content.ilike.%${query}%`)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const threadsWithCounts = await Promise.all(
+    data.map(async (thread) => {
+      const { count: likesCount } = await supabase
+        .from('thread_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repliesCount } = await supabase
+        .from('thread_replies')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      let isLiked = false;
+      if (user) {
+        const { data: like } = await supabase
+          .from('thread_likes')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isLiked = !!like;
+      }
+
+      return {
+        ...thread,
+        likes_count: likesCount || 0,
+        replies_count: repliesCount || 0,
+        is_liked: isLiked,
+      };
+    })
+  );
+
+  return threadsWithCounts as Thread[];
+}
+
+export async function getUserLikedThreads(userId: string) {
+  const { data: likes, error } = await supabase
+    .from('thread_likes')
+    .select(`
+      thread_id,
+      threads(
+        *,
+        user:user_profiles(id, username, email, avatar_url)
+      )
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  const threads = likes.map(like => like.threads).filter(Boolean);
+  
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const threadsWithCounts = await Promise.all(
+    threads.map(async (thread: any) => {
+      const { count: likesCount } = await supabase
+        .from('thread_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repliesCount } = await supabase
+        .from('thread_replies')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      let isLiked = false;
+      if (user) {
+        const { data: like } = await supabase
+          .from('thread_likes')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isLiked = !!like;
+      }
+
+      return {
+        ...thread,
+        likes_count: likesCount || 0,
+        replies_count: repliesCount || 0,
+        is_liked: isLiked,
+      };
+    })
+  );
+
+  return threadsWithCounts as Thread[];
+}

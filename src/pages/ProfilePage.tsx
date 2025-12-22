@@ -85,7 +85,11 @@ export function ProfilePage() {
               </Avatar>
 
               {isOwnProfile && (
-                <Button variant="outline" className="rounded-full">
+                <Button 
+                  variant="outline" 
+                  className="rounded-full"
+                  onClick={() => navigate('/profile/edit')}
+                >
                   <Settings className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>

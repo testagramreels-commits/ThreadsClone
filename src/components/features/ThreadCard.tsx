@@ -7,6 +7,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { toggleThreadLike } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { ThreadContent } from './ThreadContent';
 
 interface ThreadCardProps {
   thread: Thread;
@@ -89,7 +90,7 @@ export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
             </Button>
           </div>
           
-          <p className="text-base leading-relaxed whitespace-pre-wrap">{thread.content}</p>
+          <ThreadContent content={thread.content} />
           
           {thread.image_url && (
             <img 

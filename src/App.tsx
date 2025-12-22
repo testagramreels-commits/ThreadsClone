@@ -3,7 +3,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { LoginPage } from '@/pages/LoginPage';
 import { HomePage } from '@/pages/HomePage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { EditProfilePage } from '@/pages/EditProfilePage';
 import { ThreadDetailPage } from '@/pages/ThreadDetailPage';
+import { SearchPage } from '@/pages/SearchPage';
+import { ActivityPage } from '@/pages/ActivityPage';
 import { Toaster } from '@/components/ui/toaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -50,6 +53,30 @@ function App() {
           element={
             <ProtectedRoute>
               <ThreadDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/edit"
+          element={
+            <ProtectedRoute>
+              <EditProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/search"
+          element={
+            <ProtectedRoute>
+              <SearchPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/activity"
+          element={
+            <ProtectedRoute>
+              <ActivityPage />
             </ProtectedRoute>
           }
         />

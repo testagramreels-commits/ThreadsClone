@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { Image, Smile } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Image, Smile, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/useAuth';
-import { createThread } from '@/lib/api';
+import { createThread, uploadImage } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface CreateThreadProps {
@@ -14,16 +14,50 @@ interface CreateThreadProps {
 export function CreateThread({ onThreadCreated }: CreateThreadProps) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handlePost = async () => {
     if (!content.trim() || !user) return;
     
     setLoading(true);
     try {
-      await createThread(content);
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile, 'thread-images');
+      }
+      
+      await createThread(content, imageUrl);
       setContent('');
+      setImageFile(null);
+      setImagePreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
       toast({
         title: 'Thread posted!',
         description: 'Your thread has been shared.',
@@ -58,10 +92,38 @@ export function CreateThread({ onThreadCreated }: CreateThreadProps) {
               className="min-h-[80px] resize-none border-0 p-0 focus-visible:ring-0 text-base"
             />
           </div>
+
+          {imagePreview && (
+            <div className="relative rounded-xl overflow-hidden">
+              <img src={imagePreview} alt="Upload preview" className="w-full max-h-96 object-cover" />
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute top-2 right-2 rounded-full"
+                onClick={removeImage}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           
           <div className="flex items-center justify-between">
             <div className="flex gap-2">
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+                id="thread-image-upload"
+              />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+              >
                 <Image className="h-5 w-5" />
               </Button>
               <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
