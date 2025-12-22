@@ -19,7 +19,9 @@ export interface Thread {
   user?: UserProfile;
   likes_count?: number;
   replies_count?: number;
+  reposts_count?: number;
   is_liked?: boolean;
+  is_reposted?: boolean;
 }
 
 export interface ThreadLike {
@@ -37,4 +39,16 @@ export interface ThreadReply {
   created_at: string;
   updated_at: string;
   user?: UserProfile;
+}
+
+export interface ThreadRepost {
+  id: string;
+  thread_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface TrendingHashtag {
+  hashtag: string;
+  count: number;
 }

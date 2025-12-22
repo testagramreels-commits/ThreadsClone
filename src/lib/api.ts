@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Thread, ThreadLike, ThreadReply, UserProfile } from '@/types/database';
+import { Thread, ThreadLike, ThreadReply, UserProfile, TrendingHashtag } from '@/types/database';
 
 export async function getThreads() {
   const { data: threads, error } = await supabase
@@ -30,8 +30,15 @@ export async function getThreads() {
         .select('*', { count: 'exact', head: true })
         .eq('thread_id', thread.id);
 
+      // Get reposts count
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
       // Check if current user liked this thread
       let isLiked = false;
+      let isReposted = false;
       if (user) {
         const { data: like } = await supabase
           .from('thread_likes')
@@ -40,13 +47,23 @@ export async function getThreads() {
           .eq('user_id', user.id)
           .single();
         isLiked = !!like;
+
+        const { data: repost } = await supabase
+          .from('thread_reposts')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isReposted = !!repost;
       }
 
       return {
         ...thread,
         likes_count: likesCount || 0,
         replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
         is_liked: isLiked,
+        is_reposted: isReposted,
       };
     })
   );
@@ -166,7 +183,13 @@ export async function getUserThreads(userId: string) {
         .select('*', { count: 'exact', head: true })
         .eq('thread_id', thread.id);
 
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
       let isLiked = false;
+      let isReposted = false;
       if (user) {
         const { data: like } = await supabase
           .from('thread_likes')
@@ -175,13 +198,23 @@ export async function getUserThreads(userId: string) {
           .eq('user_id', user.id)
           .single();
         isLiked = !!like;
+
+        const { data: repost } = await supabase
+          .from('thread_reposts')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isReposted = !!repost;
       }
 
       return {
         ...thread,
         likes_count: likesCount || 0,
         replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
         is_liked: isLiked,
+        is_reposted: isReposted,
       };
     })
   );
@@ -311,7 +344,13 @@ export async function searchThreads(query: string) {
         .select('*', { count: 'exact', head: true })
         .eq('thread_id', thread.id);
 
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
       let isLiked = false;
+      let isReposted = false;
       if (user) {
         const { data: like } = await supabase
           .from('thread_likes')
@@ -320,18 +359,94 @@ export async function searchThreads(query: string) {
           .eq('user_id', user.id)
           .single();
         isLiked = !!like;
+
+        const { data: repost } = await supabase
+          .from('thread_reposts')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isReposted = !!repost;
       }
 
       return {
         ...thread,
         likes_count: likesCount || 0,
         replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
         is_liked: isLiked,
+        is_reposted: isReposted,
       };
     })
   );
 
   return threadsWithCounts as Thread[];
+}
+
+export async function toggleThreadRepost(threadId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be logged in to repost a thread');
+
+  // Check if already reposted
+  const { data: existingRepost } = await supabase
+    .from('thread_reposts')
+    .select('id')
+    .eq('thread_id', threadId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (existingRepost) {
+    // Unrepost
+    const { error } = await supabase
+      .from('thread_reposts')
+      .delete()
+      .eq('id', existingRepost.id);
+    if (error) throw error;
+    return false;
+  } else {
+    // Repost
+    const { error } = await supabase
+      .from('thread_reposts')
+      .insert({
+        thread_id: threadId,
+        user_id: user.id,
+      });
+    if (error) throw error;
+    return true;
+  }
+}
+
+export async function getTrendingHashtags(): Promise<TrendingHashtag[]> {
+  // Get all threads from the last 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const { data: threads, error } = await supabase
+    .from('threads')
+    .select('content')
+    .gte('created_at', sevenDaysAgo.toISOString());
+
+  if (error) throw error;
+
+  // Extract and count hashtags
+  const hashtagCounts: { [key: string]: number } = {};
+  const hashtagRegex = /#(\w+)/g;
+
+  threads.forEach((thread) => {
+    const matches = thread.content.matchAll(hashtagRegex);
+    for (const match of matches) {
+      const hashtag = match[0].toLowerCase();
+      hashtagCounts[hashtag] = (hashtagCounts[hashtag] || 0) + 1;
+    }
+  });
+
+  // Convert to array and sort by count
+  const trending = Object.entries(hashtagCounts)
+    .map(([hashtag, count]) => ({ hashtag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  return trending;
 }
 
 export async function getUserLikedThreads(userId: string) {
@@ -365,7 +480,13 @@ export async function getUserLikedThreads(userId: string) {
         .select('*', { count: 'exact', head: true })
         .eq('thread_id', thread.id);
 
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
       let isLiked = false;
+      let isReposted = false;
       if (user) {
         const { data: like } = await supabase
           .from('thread_likes')
@@ -374,13 +495,23 @@ export async function getUserLikedThreads(userId: string) {
           .eq('user_id', user.id)
           .single();
         isLiked = !!like;
+
+        const { data: repost } = await supabase
+          .from('thread_reposts')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isReposted = !!repost;
       }
 
       return {
         ...thread,
         likes_count: likesCount || 0,
         replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
         is_liked: isLiked,
+        is_reposted: isReposted,
       };
     })
   );

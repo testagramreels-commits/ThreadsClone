@@ -4,7 +4,7 @@ import { Thread } from '@/types/database';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
-import { toggleThreadLike } from '@/lib/api';
+import { toggleThreadLike, toggleThreadRepost } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { ThreadContent } from './ThreadContent';
@@ -17,16 +17,41 @@ interface ThreadCardProps {
 export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
   const [isLiked, setIsLiked] = useState(thread.is_liked || false);
   const [likes, setLikes] = useState(thread.likes_count || 0);
+  const [isReposted, setIsReposted] = useState(thread.is_reposted || false);
+  const [reposts, setReposts] = useState(thread.reposts_count || 0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const handleLike = async () => {
+  const handleLike = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     setLoading(true);
     try {
       const liked = await toggleThreadLike(thread.id);
       setIsLiked(liked);
       setLikes(liked ? likes + 1 : likes - 1);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRepost = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoading(true);
+    try {
+      const reposted = await toggleThreadRepost(thread.id);
+      setIsReposted(reposted);
+      setReposts(reposted ? reposts + 1 : reposts - 1);
+      toast({
+        title: reposted ? 'Reposted!' : 'Unreposted',
+        description: reposted ? 'Thread has been reposted to your profile' : 'Thread removed from your reposts',
+      });
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -119,9 +144,17 @@ export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
               <span className="text-sm">{thread.replies_count || 0}</span>
             </Button>
             
-            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-              <Repeat2 className="h-5 w-5" />
-              <span className="text-sm">0</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRepost}
+              disabled={loading}
+              className={`gap-2 hover:text-green-500 transition-colors ${
+                isReposted ? 'text-green-500' : 'text-muted-foreground'
+              }`}
+            >
+              <Repeat2 className={`h-5 w-5 ${isReposted ? 'fill-current' : ''}`} />
+              <span className="text-sm">{reposts}</span>
             </Button>
             
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
