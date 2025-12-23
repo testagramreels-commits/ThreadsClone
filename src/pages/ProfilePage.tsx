@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Link as LinkIcon, MapPin, Calendar, Settings, Eye, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, MapPin, Calendar, Settings, Eye, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThreadCard } from '@/components/features/ThreadCard';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/features/BottomNav';
-import { getUserProfile, getUserThreads, toggleFollow } from '@/lib/api';
+import { AdSlot } from '@/components/features/AdSlot';
+import { getUserProfile, getUserThreads, toggleFollow, getOrCreateConversation } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { UserWithStats, Thread } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +22,7 @@ export function ProfilePage() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -73,6 +75,24 @@ export function ProfilePage() {
     }
   };
 
+  const handleMessage = async () => {
+    if (!profile) return;
+    
+    setMessageLoading(true);
+    try {
+      const conversationId = await getOrCreateConversation(profile.id);
+      navigate(`/messages/${conversationId}`);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
   const isOwnProfile = currentUser?.username === username;
 
   if (loading) {
@@ -113,25 +133,37 @@ export function ProfilePage() {
                 <AvatarFallback className="text-2xl">{profile.username?.[0]?.toUpperCase()}</AvatarFallback>
               </Avatar>
 
-              {isOwnProfile ? (
-                <Button 
-                  variant="outline" 
-                  className="rounded-full"
-                  onClick={() => navigate('/profile/edit')}
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Edit Profile
-                </Button>
-              ) : (
-                <Button 
-                  variant={profile.is_following ? 'outline' : 'default'}
-                  className="rounded-full"
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                >
-                  {followLoading ? 'Loading...' : profile.is_following ? 'Following' : 'Follow'}
-                </Button>
-              )}
+              <div className="flex gap-2">
+                {isOwnProfile ? (
+                  <Button 
+                    variant="outline" 
+                    className="rounded-full"
+                    onClick={() => navigate('/profile/edit')}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Edit Profile
+                  </Button>
+                ) : (
+                  <>
+                    <Button 
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={handleMessage}
+                      disabled={messageLoading}
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant={profile.is_following ? 'outline' : 'default'}
+                      className="rounded-full"
+                      onClick={handleFollow}
+                      disabled={followLoading}
+                    >
+                      {followLoading ? 'Loading...' : profile.is_following ? 'Following' : 'Follow'}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -197,6 +229,8 @@ export function ProfilePage() {
             </div>
           </div>
         </div>
+
+        <AdSlot position="profile" className="my-4" />
 
         <div className="divide-y">
           {threads.length === 0 ? (

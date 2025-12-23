@@ -77,3 +77,48 @@ export interface UserWithStats extends UserProfile {
   is_following?: boolean;
   analytics?: ProfileAnalytics;
 }
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  actor_id?: string;
+  type: 'like' | 'reply' | 'follow' | 'repost' | 'mention' | 'trending';
+  thread_id?: string;
+  reply_id?: string;
+  is_read: boolean;
+  content?: string;
+  created_at: string;
+  actor?: UserProfile;
+  thread?: Thread;
+}
+
+export interface Conversation {
+  id: string;
+  participant1_id: string;
+  participant2_id: string;
+  last_message_at: string;
+  created_at: string;
+  participant1?: UserProfile;
+  participant2?: UserProfile;
+  last_message?: DirectMessage;
+  unread_count?: number;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  sender?: UserProfile;
+}
+
+export interface AdPlacement {
+  id: string;
+  name: string;
+  ad_code: string;
+  position: 'feed' | 'sidebar' | 'profile' | 'video';
+  is_active: boolean;
+  created_at: string;
+}

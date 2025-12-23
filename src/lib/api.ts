@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Thread, ThreadLike, ThreadReply, UserProfile, TrendingHashtag, Follow, UserWithStats } from '@/types/database';
+import { Thread, ThreadLike, ThreadReply, UserProfile, TrendingHashtag, Follow, UserWithStats, Notification, Conversation, DirectMessage, AdPlacement } from '@/types/database';
 
 export async function getThreads() {
   const { data: threads, error } = await supabase
@@ -95,6 +95,31 @@ export async function createThread(content: string, imageUrl?: string, videoUrl?
     .single();
 
   if (error) throw error;
+
+  // Check for mentions and create notifications
+  const mentionRegex = /@(\w+)/g;
+  const mentions = content.match(mentionRegex);
+  if (mentions) {
+    for (const mention of mentions) {
+      const username = mention.substring(1);
+      const { data: mentionedUser } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+      
+      if (mentionedUser) {
+        await supabase.rpc('create_notification', {
+          p_user_id: mentionedUser.id,
+          p_actor_id: user.id,
+          p_type: 'mention',
+          p_thread_id: data.id,
+          p_content: `mentioned you in a thread`
+        });
+      }
+    }
+  }
+
   return data as Thread;
 }
 
@@ -119,7 +144,7 @@ export async function toggleThreadLike(threadId: string) {
     if (error) throw error;
     return false;
   } else {
-    // Like
+    // Like (notification will be created by trigger)
     const { error } = await supabase
       .from('thread_likes')
       .insert({
@@ -149,6 +174,32 @@ export async function createThreadReply(threadId: string, content: string) {
     .single();
 
   if (error) throw error;
+
+  // Check for mentions and create notifications
+  const mentionRegex = /@(\w+)/g;
+  const mentions = content.match(mentionRegex);
+  if (mentions) {
+    for (const mention of mentions) {
+      const username = mention.substring(1);
+      const { data: mentionedUser } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+      
+      if (mentionedUser) {
+        await supabase.rpc('create_notification', {
+          p_user_id: mentionedUser.id,
+          p_actor_id: user.id,
+          p_type: 'mention',
+          p_thread_id: threadId,
+          p_reply_id: data.id,
+          p_content: `mentioned you in a reply`
+        });
+      }
+    }
+  }
+
   return data as ThreadReply;
 }
 
@@ -483,7 +534,7 @@ export async function toggleThreadRepost(threadId: string) {
     if (error) throw error;
     return false;
   } else {
-    // Repost
+    // Repost (notification will be created by trigger)
     const { error } = await supabase
       .from('thread_reposts')
       .insert({
@@ -621,7 +672,7 @@ export async function toggleFollow(userId: string) {
     if (error) throw error;
     return false;
   } else {
-    // Follow
+    // Follow (notification will be created by trigger)
     const { error } = await supabase
       .from('follows')
       .insert({
@@ -761,6 +812,149 @@ export async function getTrendingThreads(): Promise<Thread[]> {
     .slice(0, 20) as Thread[];
 }
 
+// Get threads from followed users
+export async function getFollowingThreads(): Promise<Thread[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Get followed users
+  const { data: follows } = await supabase
+    .from('follows')
+    .select('following_id')
+    .eq('follower_id', user.id);
+
+  if (!follows || follows.length === 0) return [];
+
+  const followingIds = follows.map(f => f.following_id);
+
+  const { data: threads, error } = await supabase
+    .from('threads')
+    .select(`
+      *,
+      user:user_profiles(id, username, email, avatar_url)
+    `)
+    .in('user_id', followingIds)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+
+  const threadsWithCounts = await Promise.all(
+    threads.map(async (thread) => {
+      const { count: likesCount } = await supabase
+        .from('thread_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repliesCount } = await supabase
+        .from('thread_replies')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { data: like } = await supabase
+        .from('thread_likes')
+        .select('id')
+        .eq('thread_id', thread.id)
+        .eq('user_id', user.id)
+        .single();
+      
+      const { data: repost } = await supabase
+        .from('thread_reposts')
+        .select('id')
+        .eq('thread_id', thread.id)
+        .eq('user_id', user.id)
+        .single();
+
+      return {
+        ...thread,
+        likes_count: likesCount || 0,
+        replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
+        is_liked: !!like,
+        is_reposted: !!repost,
+      };
+    })
+  );
+
+  return threadsWithCounts as Thread[];
+}
+
+// Get threads with mentions
+export async function getMentionThreads(): Promise<Thread[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Get user profile for username
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('username')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile) return [];
+
+  const { data: threads, error } = await supabase
+    .from('threads')
+    .select(`
+      *,
+      user:user_profiles(id, username, email, avatar_url)
+    `)
+    .ilike('content', `%@${profile.username}%`)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+
+  const threadsWithCounts = await Promise.all(
+    threads.map(async (thread) => {
+      const { count: likesCount } = await supabase
+        .from('thread_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repliesCount } = await supabase
+        .from('thread_replies')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { data: like } = await supabase
+        .from('thread_likes')
+        .select('id')
+        .eq('thread_id', thread.id)
+        .eq('user_id', user.id)
+        .single();
+      
+      const { data: repost } = await supabase
+        .from('thread_reposts')
+        .select('id')
+        .eq('thread_id', thread.id)
+        .eq('user_id', user.id)
+        .single();
+
+      return {
+        ...thread,
+        likes_count: likesCount || 0,
+        replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
+        is_liked: !!like,
+        is_reposted: !!repost,
+      };
+    })
+  );
+
+  return threadsWithCounts as Thread[];
+}
+
 // Get video feed (TikTok style)
 export async function getVideoFeed(): Promise<Thread[]> {
   const { data: threads, error } = await supabase
@@ -826,6 +1020,252 @@ export async function getVideoFeed(): Promise<Thread[]> {
   );
 
   return threadsWithCounts as Thread[];
+}
+
+// Notification functions
+export async function getNotifications(): Promise<Notification[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('notifications')
+    .select(`
+      *,
+      actor:actor_id(id, username, email, avatar_url),
+      thread:thread_id(id, content)
+    `)
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+  return data as Notification[];
+}
+
+export async function markNotificationAsRead(notificationId: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', notificationId);
+
+  if (error) throw error;
+}
+
+export async function markAllNotificationsAsRead() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', user.id)
+    .eq('is_read', false);
+
+  if (error) throw error;
+}
+
+export async function getUnreadNotificationsCount(): Promise<number> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('is_read', false);
+
+  if (error) return 0;
+  return count || 0;
+}
+
+// Direct Message functions
+export async function getConversations(): Promise<Conversation[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(`
+      *,
+      participant1:participant1_id(id, username, email, avatar_url),
+      participant2:participant2_id(id, username, email, avatar_url)
+    `)
+    .or(`participant1_id.eq.${user.id},participant2_id.eq.${user.id}`)
+    .order('last_message_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Get last message and unread count for each conversation
+  const conversationsWithDetails = await Promise.all(
+    data.map(async (conv) => {
+      const { data: lastMessage } = await supabase
+        .from('direct_messages')
+        .select('*')
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      const { count: unreadCount } = await supabase
+        .from('direct_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('conversation_id', conv.id)
+        .eq('is_read', false)
+        .neq('sender_id', user.id);
+
+      return {
+        ...conv,
+        last_message: lastMessage,
+        unread_count: unreadCount || 0,
+      };
+    })
+  );
+
+  return conversationsWithDetails as Conversation[];
+}
+
+export async function getOrCreateConversation(otherUserId: string): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be logged in to message users');
+
+  const [smaller, larger] = [user.id, otherUserId].sort();
+
+  // Check if conversation exists
+  const { data: existing } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('participant1_id', smaller)
+    .eq('participant2_id', larger)
+    .single();
+
+  if (existing) return existing.id;
+
+  // Create new conversation
+  const { data: newConv, error } = await supabase
+    .from('conversations')
+    .insert({
+      participant1_id: smaller,
+      participant2_id: larger,
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return newConv.id;
+}
+
+export async function getMessages(conversationId: string): Promise<DirectMessage[]> {
+  const { data, error } = await supabase
+    .from('direct_messages')
+    .select(`
+      *,
+      sender:sender_id(id, username, email, avatar_url)
+    `)
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data as DirectMessage[];
+}
+
+export async function sendMessage(conversationId: string, content: string): Promise<DirectMessage> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be logged in to send messages');
+
+  const { data, error } = await supabase
+    .from('direct_messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_id: user.id,
+      content,
+    })
+    .select(`
+      *,
+      sender:sender_id(id, username, email, avatar_url)
+    `)
+    .single();
+
+  if (error) throw error;
+
+  // Update conversation last_message_at
+  await supabase
+    .from('conversations')
+    .update({ last_message_at: new Date().toISOString() })
+    .eq('id', conversationId);
+
+  return data as DirectMessage;
+}
+
+export async function markMessagesAsRead(conversationId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('direct_messages')
+    .update({ is_read: true })
+    .eq('conversation_id', conversationId)
+    .neq('sender_id', user.id)
+    .eq('is_read', false);
+
+  if (error) throw error;
+}
+
+// Ad placement functions
+export async function getActiveAds(position: 'feed' | 'sidebar' | 'profile' | 'video'): Promise<AdPlacement[]> {
+  const { data, error } = await supabase
+    .from('ad_placements')
+    .select('*')
+    .eq('position', position)
+    .eq('is_active', true);
+
+  if (error) return [];
+  return data as AdPlacement[];
+}
+
+export async function getAllAds(): Promise<AdPlacement[]> {
+  const { data, error } = await supabase
+    .from('ad_placements')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data as AdPlacement[];
+}
+
+export async function createAd(name: string, adCode: string, position: 'feed' | 'sidebar' | 'profile' | 'video'): Promise<AdPlacement> {
+  const { data, error } = await supabase
+    .from('ad_placements')
+    .insert({
+      name,
+      ad_code: adCode,
+      position,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as AdPlacement;
+}
+
+export async function updateAd(adId: string, updates: Partial<AdPlacement>) {
+  const { data, error } = await supabase
+    .from('ad_placements')
+    .update(updates)
+    .eq('id', adId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as AdPlacement;
+}
+
+export async function deleteAd(adId: string) {
+  const { error } = await supabase
+    .from('ad_placements')
+    .delete()
+    .eq('id', adId);
+
+  if (error) throw error;
 }
 
 // Check if user is admin

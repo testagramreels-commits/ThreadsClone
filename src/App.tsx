@@ -9,6 +9,9 @@ import { SearchPage } from '@/pages/SearchPage';
 import { ActivityPage } from '@/pages/ActivityPage';
 import { VideoFeedPage } from '@/pages/VideoFeedPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
+import { MessagesPage } from '@/pages/MessagesPage';
+import { MessageConversationPage } from '@/pages/MessageConversationPage';
 import { Toaster } from '@/components/ui/toaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -95,6 +98,30 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <ProtectedRoute>
+              <MessagesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages/:conversationId"
+          element={
+            <ProtectedRoute>
+              <MessageConversationPage />
             </ProtectedRoute>
           }
         />
