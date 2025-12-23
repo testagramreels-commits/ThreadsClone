@@ -1,12 +1,12 @@
 import { supabase } from './supabase';
-import { Thread, ThreadLike, ThreadReply, UserProfile, TrendingHashtag } from '@/types/database';
+import { Thread, ThreadLike, ThreadReply, UserProfile, TrendingHashtag, Follow, UserWithStats } from '@/types/database';
 
 export async function getThreads() {
   const { data: threads, error } = await supabase
     .from('threads')
     .select(`
       *,
-      user:user_profiles(id, username, email)
+      user:user_profiles(id, username, email, avatar_url)
     `)
     .order('created_at', { ascending: false });
 
@@ -71,9 +71,13 @@ export async function getThreads() {
   return threadsWithCounts as Thread[];
 }
 
-export async function createThread(content: string, imageUrl?: string) {
+export async function createThread(content: string, imageUrl?: string, videoUrl?: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('You must be logged in to create a thread');
+
+  let mediaType: 'text' | 'image' | 'video' = 'text';
+  if (videoUrl) mediaType = 'video';
+  else if (imageUrl) mediaType = 'image';
 
   const { data, error } = await supabase
     .from('threads')
@@ -81,10 +85,12 @@ export async function createThread(content: string, imageUrl?: string) {
       user_id: user.id,
       content,
       image_url: imageUrl,
+      video_url: videoUrl,
+      media_type: mediaType,
     })
     .select(`
       *,
-      user:user_profiles(id, username, email)
+      user:user_profiles(id, username, email, avatar_url)
     `)
     .single();
 
@@ -146,7 +152,7 @@ export async function createThreadReply(threadId: string, content: string) {
   return data as ThreadReply;
 }
 
-export async function getUserProfile(username: string) {
+export async function getUserProfile(username: string): Promise<UserWithStats> {
   const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
@@ -154,7 +160,56 @@ export async function getUserProfile(username: string) {
     .single();
 
   if (error) throw error;
-  return data as UserProfile;
+
+  // Increment profile view
+  await supabase.rpc('increment_profile_view', { profile_user_id: data.id });
+
+  // Get followers count
+  const { count: followersCount } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('following_id', data.id);
+
+  // Get following count
+  const { count: followingCount } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('follower_id', data.id);
+
+  // Get threads count
+  const { count: threadsCount } = await supabase
+    .from('threads')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', data.id);
+
+  // Get analytics
+  const { data: analytics } = await supabase
+    .from('profile_analytics')
+    .select('*')
+    .eq('user_id', data.id)
+    .single();
+
+  // Check if current user is following
+  const { data: { user } } = await supabase.auth.getUser();
+  let isFollowing = false;
+  if (user && user.id !== data.id) {
+    const { data: follow } = await supabase
+      .from('follows')
+      .select('id')
+      .eq('follower_id', user.id)
+      .eq('following_id', data.id)
+      .single();
+    isFollowing = !!follow;
+  }
+
+  return {
+    ...data,
+    followers_count: followersCount || 0,
+    following_count: followingCount || 0,
+    threads_count: threadsCount || 0,
+    is_following: isFollowing,
+    analytics,
+  } as UserWithStats;
 }
 
 export async function getUserThreads(userId: string) {
@@ -297,6 +352,30 @@ export async function uploadImage(file: File, bucket: 'thread-images' | 'avatars
 
   const { data: { publicUrl } } = supabase.storage
     .from(bucket)
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+}
+
+export async function uploadVideo(file: File): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be logged in to upload videos');
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+  // Show upload progress
+  const { data, error } = await supabase.storage
+    .from('videos')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('videos')
     .getPublicUrl(fileName);
 
   return publicUrl;
@@ -517,4 +596,293 @@ export async function getUserLikedThreads(userId: string) {
   );
 
   return threadsWithCounts as Thread[];
+}
+
+// Follow/Unfollow functions
+export async function toggleFollow(userId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be logged in to follow users');
+  if (user.id === userId) throw new Error('You cannot follow yourself');
+
+  // Check if already following
+  const { data: existingFollow } = await supabase
+    .from('follows')
+    .select('id')
+    .eq('follower_id', user.id)
+    .eq('following_id', userId)
+    .single();
+
+  if (existingFollow) {
+    // Unfollow
+    const { error } = await supabase
+      .from('follows')
+      .delete()
+      .eq('id', existingFollow.id);
+    if (error) throw error;
+    return false;
+  } else {
+    // Follow
+    const { error } = await supabase
+      .from('follows')
+      .insert({
+        follower_id: user.id,
+        following_id: userId,
+      });
+    if (error) throw error;
+    return true;
+  }
+}
+
+// Get suggested users to follow
+export async function getSuggestedUsers(): Promise<UserWithStats[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Get users not already followed, sorted by activity
+  const { data: users, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .neq('id', user.id)
+    .limit(10);
+
+  if (error) throw error;
+
+  const usersWithStats = await Promise.all(
+    users.map(async (profile) => {
+      // Get followers count
+      const { count: followersCount } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', profile.id);
+
+      // Get threads count
+      const { count: threadsCount } = await supabase
+        .from('threads')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', profile.id);
+
+      // Check if current user is following
+      const { data: follow } = await supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', user.id)
+        .eq('following_id', profile.id)
+        .single();
+
+      return {
+        ...profile,
+        followers_count: followersCount || 0,
+        threads_count: threadsCount || 0,
+        is_following: !!follow,
+      };
+    })
+  );
+
+  // Filter out already followed users and sort by activity
+  return usersWithStats
+    .filter(u => !u.is_following)
+    .sort((a, b) => (b.threads_count || 0) - (a.threads_count || 0))
+    .slice(0, 5);
+}
+
+// Get trending threads
+export async function getTrendingThreads(): Promise<Thread[]> {
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+  const { data: threads, error } = await supabase
+    .from('threads')
+    .select(`
+      *,
+      user:user_profiles(id, username, email, avatar_url)
+    `)
+    .gte('created_at', threeDaysAgo.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const threadsWithCounts = await Promise.all(
+    threads.map(async (thread) => {
+      const { count: likesCount } = await supabase
+        .from('thread_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repliesCount } = await supabase
+        .from('thread_replies')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      let isLiked = false;
+      let isReposted = false;
+      if (user) {
+        const { data: like } = await supabase
+          .from('thread_likes')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isLiked = !!like;
+
+        const { data: repost } = await supabase
+          .from('thread_reposts')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isReposted = !!repost;
+      }
+
+      const engagement = (likesCount || 0) + (repliesCount || 0) * 2 + (repostsCount || 0) * 3;
+
+      return {
+        ...thread,
+        likes_count: likesCount || 0,
+        replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
+        is_liked: isLiked,
+        is_reposted: isReposted,
+        engagement,
+      };
+    })
+  );
+
+  // Sort by engagement
+  return threadsWithCounts
+    .sort((a: any, b: any) => b.engagement - a.engagement)
+    .slice(0, 20) as Thread[];
+}
+
+// Get video feed (TikTok style)
+export async function getVideoFeed(): Promise<Thread[]> {
+  const { data: threads, error } = await supabase
+    .from('threads')
+    .select(`
+      *,
+      user:user_profiles(id, username, email, avatar_url)
+    `)
+    .eq('media_type', 'video')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const threadsWithCounts = await Promise.all(
+    threads.map(async (thread) => {
+      const { count: likesCount } = await supabase
+        .from('thread_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repliesCount } = await supabase
+        .from('thread_replies')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      const { count: repostsCount } = await supabase
+        .from('thread_reposts')
+        .select('*', { count: 'exact', head: true })
+        .eq('thread_id', thread.id);
+
+      let isLiked = false;
+      let isReposted = false;
+      if (user) {
+        const { data: like } = await supabase
+          .from('thread_likes')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isLiked = !!like;
+
+        const { data: repost } = await supabase
+          .from('thread_reposts')
+          .select('id')
+          .eq('thread_id', thread.id)
+          .eq('user_id', user.id)
+          .single();
+        isReposted = !!repost;
+      }
+
+      return {
+        ...thread,
+        likes_count: likesCount || 0,
+        replies_count: repliesCount || 0,
+        reposts_count: repostsCount || 0,
+        is_liked: isLiked,
+        is_reposted: isReposted,
+      };
+    })
+  );
+
+  return threadsWithCounts as Thread[];
+}
+
+// Check if user is admin
+export async function isAdmin(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('email')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile) return false;
+
+  const { data: admin } = await supabase
+    .from('admin_users')
+    .select('id')
+    .eq('email', profile.email)
+    .single();
+
+  return !!admin;
+}
+
+// Get platform analytics (admin only)
+export async function getPlatformAnalytics() {
+  const { count: totalUsers } = await supabase
+    .from('user_profiles')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: totalThreads } = await supabase
+    .from('threads')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: totalLikes } = await supabase
+    .from('thread_likes')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: totalReplies } = await supabase
+    .from('thread_replies')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: totalFollows } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: videoThreads } = await supabase
+    .from('threads')
+    .select('*', { count: 'exact', head: true })
+    .eq('media_type', 'video');
+
+  return {
+    totalUsers: totalUsers || 0,
+    totalThreads: totalThreads || 0,
+    totalLikes: totalLikes || 0,
+    totalReplies: totalReplies || 0,
+    totalFollows: totalFollows || 0,
+    videoThreads: videoThreads || 0,
+  };
 }

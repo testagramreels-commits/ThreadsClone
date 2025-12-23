@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Link as LinkIcon, MapPin, Calendar, Settings } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, MapPin, Calendar, Settings, Eye, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThreadCard } from '@/components/features/ThreadCard';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/features/BottomNav';
-import { getUserProfile, getUserThreads } from '@/lib/api';
+import { getUserProfile, getUserThreads, toggleFollow } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { UserProfile, Thread } from '@/types/database';
+import { UserWithStats, Thread } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -17,9 +17,10 @@ export function ProfilePage() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<UserWithStats | null>(null);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -41,6 +42,34 @@ export function ProfilePage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!profile) return;
+    
+    setFollowLoading(true);
+    try {
+      const followed = await toggleFollow(profile.id);
+      setProfile({
+        ...profile,
+        is_following: followed,
+        followers_count: followed 
+          ? (profile.followers_count || 0) + 1 
+          : (profile.followers_count || 0) - 1,
+      });
+      toast({
+        title: followed ? 'Following!' : 'Unfollowed',
+        description: followed ? `You're now following @${profile.username}` : `You unfollowed @${profile.username}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setFollowLoading(false);
     }
   };
 
@@ -84,7 +113,7 @@ export function ProfilePage() {
                 <AvatarFallback className="text-2xl">{profile.username?.[0]?.toUpperCase()}</AvatarFallback>
               </Avatar>
 
-              {isOwnProfile && (
+              {isOwnProfile ? (
                 <Button 
                   variant="outline" 
                   className="rounded-full"
@@ -92,6 +121,15 @@ export function ProfilePage() {
                 >
                   <Settings className="h-4 w-4 mr-2" />
                   Edit Profile
+                </Button>
+              ) : (
+                <Button 
+                  variant={profile.is_following ? 'outline' : 'default'}
+                  className="rounded-full"
+                  onClick={handleFollow}
+                  disabled={followLoading}
+                >
+                  {followLoading ? 'Loading...' : profile.is_following ? 'Following' : 'Follow'}
                 </Button>
               )}
             </div>
@@ -106,7 +144,24 @@ export function ProfilePage() {
                 <p className="text-sm">{profile.bio}</p>
               )}
 
+              <div className="flex flex-wrap gap-3 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">{profile.followers_count || 0}</span>
+                  <span className="text-muted-foreground">followers</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">{profile.following_count || 0}</span>
+                  <span className="text-muted-foreground">following</span>
+                </div>
+              </div>
+
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                {profile.analytics && (
+                  <div className="flex items-center gap-1">
+                    <Eye className="h-4 w-4" />
+                    <span>{profile.analytics.profile_views.toLocaleString()} views</span>
+                  </div>
+                )}
                 {profile.location && (
                   <div className="flex items-center gap-1">
                     <MapPin className="h-4 w-4" />

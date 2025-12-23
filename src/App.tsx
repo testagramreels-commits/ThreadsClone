@@ -7,6 +7,8 @@ import { EditProfilePage } from '@/pages/EditProfilePage';
 import { ThreadDetailPage } from '@/pages/ThreadDetailPage';
 import { SearchPage } from '@/pages/SearchPage';
 import { ActivityPage } from '@/pages/ActivityPage';
+import { VideoFeedPage } from '@/pages/VideoFeedPage';
+import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { Toaster } from '@/components/ui/toaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -77,6 +79,22 @@ function App() {
           element={
             <ProtectedRoute>
               <ActivityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/videos"
+          element={
+            <ProtectedRoute>
+              <VideoFeedPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboardPage />
             </ProtectedRoute>
           }
         />

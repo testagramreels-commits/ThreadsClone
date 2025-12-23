@@ -1,0 +1,18 @@
+# Threads Platform - Sitemap
+
+## Main Pages
+- Home: /
+- Login: /login
+- Search: /search
+- Activity: /activity
+- Videos: /videos
+
+## User Pages
+- Profile: /profile/:username
+- Edit Profile: /profile/edit
+
+## Thread Pages
+- Thread Detail: /thread/:threadId
+
+## Admin Pages
+- Admin Dashboard: /admin (restricted access)

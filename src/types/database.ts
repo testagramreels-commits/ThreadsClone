@@ -14,6 +14,8 @@ export interface Thread {
   user_id: string;
   content: string;
   image_url?: string;
+  video_url?: string;
+  media_type?: 'text' | 'image' | 'video';
   created_at: string;
   updated_at: string;
   user?: UserProfile;
@@ -51,4 +53,27 @@ export interface ThreadRepost {
 export interface TrendingHashtag {
   hashtag: string;
   count: number;
+}
+
+export interface Follow {
+  id: string;
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+}
+
+export interface ProfileAnalytics {
+  id: string;
+  user_id: string;
+  profile_views: number;
+  total_engagement: number;
+  updated_at: string;
+}
+
+export interface UserWithStats extends UserProfile {
+  followers_count?: number;
+  following_count?: number;
+  threads_count?: number;
+  is_following?: boolean;
+  analytics?: ProfileAnalytics;
 }

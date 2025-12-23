@@ -125,6 +125,14 @@ export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
             />
           )}
           
+          {thread.video_url && (
+            <video 
+              src={thread.video_url} 
+              controls
+              className="rounded-xl w-full max-h-96 object-cover mt-3"
+            />
+          )}
+          
           <div className="flex items-center gap-1 pt-2">
             <Button
               variant="ghost"
