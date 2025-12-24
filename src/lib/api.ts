@@ -45,7 +45,7 @@ export async function getThreads() {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isLiked = !!like;
 
         const { data: repost } = await supabase
@@ -53,7 +53,7 @@ export async function getThreads() {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isReposted = !!repost;
       }
 
@@ -106,7 +106,7 @@ export async function createThread(content: string, imageUrl?: string, videoUrl?
         .from('user_profiles')
         .select('id')
         .eq('username', username)
-        .single();
+        .maybeSingle();
       
       if (mentionedUser) {
         await supabase.rpc('create_notification', {
@@ -133,7 +133,7 @@ export async function toggleThreadLike(threadId: string) {
     .select('id')
     .eq('thread_id', threadId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (existingLike) {
     // Unlike
@@ -185,7 +185,7 @@ export async function createThreadReply(threadId: string, content: string) {
         .from('user_profiles')
         .select('id')
         .eq('username', username)
-        .single();
+        .maybeSingle();
       
       if (mentionedUser) {
         await supabase.rpc('create_notification', {
@@ -208,12 +208,17 @@ export async function getUserProfile(username: string): Promise<UserWithStats> {
     .from('user_profiles')
     .select('*')
     .eq('username', username)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) throw new Error('User not found');
 
-  // Increment profile view
-  await supabase.rpc('increment_profile_view', { profile_user_id: data.id });
+  // Increment profile view (ignore errors)
+  try {
+    await supabase.rpc('increment_profile_view', { profile_user_id: data.id });
+  } catch (e) {
+    console.error('Failed to increment profile view:', e);
+  }
 
   // Get followers count
   const { count: followersCount } = await supabase
@@ -233,12 +238,12 @@ export async function getUserProfile(username: string): Promise<UserWithStats> {
     .select('*', { count: 'exact', head: true })
     .eq('user_id', data.id);
 
-  // Get analytics
+  // Get analytics (may not exist)
   const { data: analytics } = await supabase
     .from('profile_analytics')
     .select('*')
     .eq('user_id', data.id)
-    .single();
+    .maybeSingle();
 
   // Check if current user is following
   const { data: { user } } = await supabase.auth.getUser();
@@ -249,7 +254,7 @@ export async function getUserProfile(username: string): Promise<UserWithStats> {
       .select('id')
       .eq('follower_id', user.id)
       .eq('following_id', data.id)
-      .single();
+      .maybeSingle();
     isFollowing = !!follow;
   }
 
@@ -259,7 +264,7 @@ export async function getUserProfile(username: string): Promise<UserWithStats> {
     following_count: followingCount || 0,
     threads_count: threadsCount || 0,
     is_following: isFollowing,
-    analytics,
+    analytics: analytics || undefined,
   } as UserWithStats;
 }
 
@@ -302,7 +307,7 @@ export async function getUserThreads(userId: string) {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isLiked = !!like;
 
         const { data: repost } = await supabase
@@ -310,7 +315,7 @@ export async function getUserThreads(userId: string) {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isReposted = !!repost;
       }
 
@@ -487,7 +492,7 @@ export async function searchThreads(query: string) {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isLiked = !!like;
 
         const { data: repost } = await supabase
@@ -495,7 +500,7 @@ export async function searchThreads(query: string) {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isReposted = !!repost;
       }
 
@@ -523,7 +528,7 @@ export async function toggleThreadRepost(threadId: string) {
     .select('id')
     .eq('thread_id', threadId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (existingRepost) {
     // Unrepost
@@ -623,7 +628,7 @@ export async function getUserLikedThreads(userId: string) {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isLiked = !!like;
 
         const { data: repost } = await supabase
@@ -631,7 +636,7 @@ export async function getUserLikedThreads(userId: string) {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isReposted = !!repost;
       }
 
@@ -661,7 +666,7 @@ export async function toggleFollow(userId: string) {
     .select('id')
     .eq('follower_id', user.id)
     .eq('following_id', userId)
-    .single();
+    .maybeSingle();
 
   if (existingFollow) {
     // Unfollow
@@ -718,7 +723,7 @@ export async function getSuggestedUsers(): Promise<UserWithStats[]> {
         .select('id')
         .eq('follower_id', user.id)
         .eq('following_id', profile.id)
-        .single();
+        .maybeSingle();
 
       return {
         ...profile,
@@ -780,7 +785,7 @@ export async function getTrendingThreads(): Promise<Thread[]> {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isLiked = !!like;
 
         const { data: repost } = await supabase
@@ -788,7 +793,7 @@ export async function getTrendingThreads(): Promise<Thread[]> {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isReposted = !!repost;
       }
 
@@ -894,7 +899,7 @@ export async function getMentionThreads(): Promise<Thread[]> {
     .from('user_profiles')
     .select('username')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile) return [];
 
@@ -996,7 +1001,7 @@ export async function getVideoFeed(): Promise<Thread[]> {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isLiked = !!like;
 
         const { data: repost } = await supabase
@@ -1004,7 +1009,7 @@ export async function getVideoFeed(): Promise<Thread[]> {
           .select('id')
           .eq('thread_id', thread.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         isReposted = !!repost;
       }
 
@@ -1104,7 +1109,7 @@ export async function getConversations(): Promise<Conversation[]> {
         .eq('conversation_id', conv.id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const { count: unreadCount } = await supabase
         .from('direct_messages')
@@ -1136,7 +1141,7 @@ export async function getOrCreateConversation(otherUserId: string): Promise<stri
     .select('id')
     .eq('participant1_id', smaller)
     .eq('participant2_id', larger)
-    .single();
+    .maybeSingle();
 
   if (existing) return existing.id;
 
@@ -1277,7 +1282,7 @@ export async function isAdmin(): Promise<boolean> {
     .from('user_profiles')
     .select('email')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile) return false;
 
@@ -1285,7 +1290,7 @@ export async function isAdmin(): Promise<boolean> {
     .from('admin_users')
     .select('id')
     .eq('email', profile.email)
-    .single();
+    .maybeSingle();
 
   return !!admin;
 }
