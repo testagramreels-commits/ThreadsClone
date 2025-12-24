@@ -9,9 +9,7 @@ import { SearchPage } from '@/pages/SearchPage';
 import { ActivityPage } from '@/pages/ActivityPage';
 import { VideoFeedPage } from '@/pages/VideoFeedPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
-import { NotificationsPage } from '@/pages/NotificationsPage';
-import { MessagesPage } from '@/pages/MessagesPage';
-import { MessageConversationPage } from '@/pages/MessageConversationPage';
+import { TrendingPage } from '@/pages/TrendingPage';
 import { BookmarksPage } from '@/pages/BookmarksPage';
 import { Toaster } from '@/components/ui/toaster';
 import { Component, ReactNode } from 'react';
@@ -141,6 +139,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/trending"
+          element={
+            <ProtectedRoute>
+              <TrendingPage />
             </ProtectedRoute>
           }
         />

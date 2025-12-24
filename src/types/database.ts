@@ -44,6 +44,10 @@ export interface ThreadReply {
   content: string;
   created_at: string;
   updated_at: string;
+  parent_reply_id?: string;
+  likes_count?: number;
+  replies_count?: number;
+  is_liked?: boolean;
   user?: UserProfile;
 }
 

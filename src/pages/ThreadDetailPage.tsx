@@ -89,7 +89,7 @@ export function ThreadDetailPage() {
           ) : (
             <div className="divide-y">
               {replies.map((reply) => (
-                <ReplyCard key={reply.id} reply={reply} />
+                <ReplyCard key={reply.id} reply={reply} onUpdate={loadThread} />
               ))}
             </div>
           )}

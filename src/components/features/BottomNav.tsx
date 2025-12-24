@@ -1,4 +1,4 @@
-import { Home, Search, PenSquare, Heart, User } from 'lucide-react';
+import { Home, Search, PenSquare, TrendingUp, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -50,10 +50,10 @@ export function BottomNav() {
         <Button 
           variant="ghost" 
           size="icon" 
-          className={`h-12 w-12 ${isActive('/activity') ? '' : 'text-muted-foreground'}`}
-          onClick={() => navigate('/activity')}
+          className={`h-12 w-12 ${isActive('/trending') ? '' : 'text-muted-foreground'}`}
+          onClick={() => navigate('/trending')}
         >
-          <Heart className="h-6 w-6" />
+          <TrendingUp className="h-6 w-6" />
         </Button>
         <Button 
           variant="ghost" 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '@/components/layout/Header';
 import { CreateThread } from '@/components/features/CreateThread';
 import { ThreadCard } from '@/components/features/ThreadCard';
@@ -9,7 +9,7 @@ import { getMixedFeed, getThreadsOptimized } from '@/lib/optimizedApi';
 import { getSuggestedUsers, getTrendingThreads, getMentionThreads } from '@/lib/api';
 import { Thread, UserWithStats } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
-import { Video } from 'lucide-react';
+import { Video, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,32 +17,52 @@ export function HomePage() {
   const [allThreads, setAllThreads] = useState<Thread[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<UserWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
   const [activeTab, setActiveTab] = useState<'latest' | 'trending' | 'following' | 'mentions'>('latest');
   const { toast } = useToast();
   const navigate = useNavigate();
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const ITEMS_PER_PAGE = 20;
 
-  const loadThreads = async () => {
+  const loadThreads = async (pageNum: number = 0, append: boolean = false) => {
+    const loadingState = append ? setLoadingMore : setLoading;
+    loadingState(true);
+    
     try {
       let threads: Thread[];
+      const offset = pageNum * ITEMS_PER_PAGE;
       
       switch (activeTab) {
         case 'trending':
           threads = await getTrendingThreads();
+          // Trending doesn't support pagination, so limit it
+          threads = threads.slice(offset, offset + ITEMS_PER_PAGE);
           break;
         case 'following':
-          threads = await getThreadsOptimized(50, 0, undefined, true);
+          threads = await getThreadsOptimized(ITEMS_PER_PAGE, offset, undefined, true);
           break;
         case 'mentions':
-          threads = await getMentionThreads();
+          const allMentions = await getMentionThreads();
+          threads = allMentions.slice(offset, offset + ITEMS_PER_PAGE);
           break;
         case 'latest':
         default:
-          // Use mixed feed that includes videos organically
-          threads = await getMixedFeed(50);
+          threads = await getMixedFeed(ITEMS_PER_PAGE + offset);
+          threads = threads.slice(offset, offset + ITEMS_PER_PAGE);
           break;
       }
       
-      setAllThreads(threads);
+      if (threads.length < ITEMS_PER_PAGE) {
+        setHasMore(false);
+      }
+      
+      if (append) {
+        setAllThreads(prev => [...prev, ...threads]);
+      } else {
+        setAllThreads(threads);
+      }
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -50,9 +70,17 @@ export function HomePage() {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      loadingState(false);
     }
   };
+
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      loadThreads(nextPage, true);
+    }
+  }, [page, loadingMore, hasMore, activeTab]);
 
   const loadSuggestions = async () => {
     try {
@@ -69,13 +97,39 @@ export function HomePage() {
 
   const handleTabChange = (tab: 'latest' | 'trending' | 'following' | 'mentions') => {
     setActiveTab(tab);
+    setPage(0);
+    setHasMore(true);
+    setAllThreads([]);
     setLoading(true);
   };
 
   useEffect(() => {
-    loadThreads();
+    loadThreads(0, false);
     loadSuggestions();
   }, [activeTab]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [hasMore, loading, loadingMore, loadMore]);
 
   // Suggestion intervals: after 4, 14, 29, 49 posts
   const getSuggestionPositions = () => {
@@ -152,7 +206,7 @@ export function HomePage() {
         </div>
 
         <div className="divide-y">
-          {loading ? (
+          {loading && allThreads.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
@@ -161,20 +215,35 @@ export function HomePage() {
               <p>No threads yet. Be the first to post!</p>
             </div>
           ) : (
-            allThreads.map((thread, index) => (
-              <div key={thread.id}>
-                <ThreadCard thread={thread} onUpdate={loadThreads} />
-                {shouldShowSuggestion(index + 1) && (
-                  <SuggestedContent 
-                    users={suggestedUsers} 
-                    onFollowChange={loadSuggestions}
-                  />
+            <>
+              {allThreads.map((thread, index) => (
+                <div key={thread.id}>
+                  <ThreadCard thread={thread} onUpdate={() => loadThreads(0, false)} />
+                  {shouldShowSuggestion(index + 1) && (
+                    <SuggestedContent 
+                      users={suggestedUsers} 
+                      onFollowChange={loadSuggestions}
+                    />
+                  )}
+                  {shouldShowAd(index + 1) && (
+                    <AdSlot position="feed" className="my-4" />
+                  )}
+                </div>
+              ))}
+              
+              {/* Infinite scroll trigger */}
+              <div ref={observerTarget} className="py-8">
+                {loadingMore && (
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <span className="ml-2 text-muted-foreground">Loading more...</span>
+                  </div>
                 )}
-                {shouldShowAd(index + 1) && (
-                  <AdSlot position="feed" className="my-4" />
+                {!hasMore && allThreads.length > 0 && (
+                  <p className="text-center text-muted-foreground">You've reached the end!</p>
                 )}
               </div>
-            ))
+            </>
           )}
         </div>
       </main>
