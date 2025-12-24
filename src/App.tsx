@@ -11,8 +11,50 @@ import { VideoFeedPage } from '@/pages/VideoFeedPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { MessagesPage } from '@/pages/MessagesPage';
+import { MessageConversationPage } from '@/pages/MessageConversationPage';
 import { BookmarksPage } from '@/pages/BookmarksPage';
 import { Toaster } from '@/components/ui/toaster';
+import { Component, ReactNode } from 'react';
+
+// Error Boundary Component
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('App Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+          <div className="max-w-md w-full space-y-4 text-center">
+            <h1 className="text-2xl font-bold text-destructive">Something went wrong</h1>
+            <p className="text-muted-foreground">{this.state.error?.message || 'An unexpected error occurred'}</p>
+            <button
+              onClick={() => window.location.href = '/login'}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+            >
+              Go to Login
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -34,6 +76,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -136,6 +179,7 @@ function App() {
       </Routes>
       <Toaster />
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

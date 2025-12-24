@@ -8,13 +8,23 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true;
 
-    // Check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && session?.user) {
-        login(mapSupabaseUser(session.user));
-      }
-      if (mounted) setLoading(false);
-    });
+    // Check existing session with error handling
+    supabase.auth.getSession()
+      .then(({ data: { session }, error }) => {
+        if (error) {
+          console.warn('Session error:', error.message);
+          // Clear any invalid session
+          supabase.auth.signOut();
+        }
+        if (mounted && session?.user) {
+          login(mapSupabaseUser(session.user));
+        }
+        if (mounted) setLoading(false);
+      })
+      .catch((error) => {
+        console.error('Session check failed:', error);
+        if (mounted) setLoading(false);
+      });
 
     // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -29,6 +39,9 @@ export function useAuth() {
           setLoading(false);
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
           login(mapSupabaseUser(session.user));
+        } else if (event === 'USER_DELETED') {
+          logout();
+          setLoading(false);
         }
       }
     );
