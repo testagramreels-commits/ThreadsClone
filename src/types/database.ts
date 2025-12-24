@@ -16,14 +16,18 @@ export interface Thread {
   image_url?: string;
   video_url?: string;
   media_type?: 'text' | 'image' | 'video';
+  quote_thread_id?: string;
   created_at: string;
   updated_at: string;
   user?: UserProfile;
   likes_count?: number;
   replies_count?: number;
   reposts_count?: number;
+  bookmarks_count?: number;
   is_liked?: boolean;
   is_reposted?: boolean;
+  is_bookmarked?: boolean;
+  quoted_thread?: Thread;
 }
 
 export interface ThreadLike {
@@ -120,5 +124,26 @@ export interface AdPlacement {
   ad_code: string;
   position: 'feed' | 'sidebar' | 'profile' | 'video';
   is_active: boolean;
+  created_at: string;
+}
+
+export interface Bookmark {
+  id: string;
+  user_id: string;
+  thread_id: string;
+  created_at: string;
+}
+
+export interface MutedUser {
+  id: string;
+  user_id: string;
+  muted_user_id: string;
+  created_at: string;
+}
+
+export interface BlockedUser {
+  id: string;
+  user_id: string;
+  blocked_user_id: string;
   created_at: string;
 }

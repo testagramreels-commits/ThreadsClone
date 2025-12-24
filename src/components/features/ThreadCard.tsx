@@ -8,13 +8,23 @@ import { toggleThreadLike, toggleThreadRepost } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { ThreadContent } from './ThreadContent';
+import { BookmarkButton } from './BookmarkButton';
+import { QuoteThreadButton } from './QuoteThreadButton';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toggleMute, toggleBlock } from '@/lib/optimizedApi';
 
 interface ThreadCardProps {
   thread: Thread;
   isDetailView?: boolean;
+  onUpdate?: () => void;
 }
 
-export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
+export function ThreadCard({ thread, isDetailView = false, onUpdate }: ThreadCardProps) {
   const [isLiked, setIsLiked] = useState(thread.is_liked || false);
   const [likes, setLikes] = useState(thread.likes_count || 0);
   const [isReposted, setIsReposted] = useState(thread.is_reposted || false);
@@ -60,6 +70,46 @@ export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMute = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!thread.user?.id) return;
+    
+    try {
+      const muted = await toggleMute(thread.user.id);
+      toast({
+        title: muted ? 'User Muted' : 'User Unmuted',
+        description: muted ? `You won't see posts from @${thread.user.username}` : `You'll now see posts from @${thread.user.username}`,
+      });
+      onUpdate?.();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleBlock = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!thread.user?.id) return;
+    
+    try {
+      const blocked = await toggleBlock(thread.user.id);
+      toast({
+        title: blocked ? 'User Blocked' : 'User Unblocked',
+        description: blocked ? `@${thread.user.username} has been blocked` : `@${thread.user.username} has been unblocked`,
+      });
+      onUpdate?.();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -110,9 +160,21 @@ export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
               </span>
             </div>
             
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleMute}>
+                  Mute @{thread.user?.username}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleBlock} className="text-destructive">
+                  Block @{thread.user?.username}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <ThreadContent content={thread.content} />
@@ -164,6 +226,15 @@ export function ThreadCard({ thread, isDetailView = false }: ThreadCardProps) {
               <Repeat2 className={`h-5 w-5 ${isReposted ? 'fill-current' : ''}`} />
               <span className="text-sm">{reposts}</span>
             </Button>
+            
+            <QuoteThreadButton thread={thread} onSuccess={onUpdate} />
+            
+            <BookmarkButton 
+              threadId={thread.id} 
+              isBookmarked={thread.is_bookmarked}
+              bookmarksCount={thread.bookmarks_count}
+              onToggle={onUpdate}
+            />
             
             <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
               <Send className="h-5 w-5" />

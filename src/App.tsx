@@ -11,7 +11,7 @@ import { VideoFeedPage } from '@/pages/VideoFeedPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { MessagesPage } from '@/pages/MessagesPage';
-import { MessageConversationPage } from '@/pages/MessageConversationPage';
+import { BookmarksPage } from '@/pages/BookmarksPage';
 import { Toaster } from '@/components/ui/toaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -122,6 +122,14 @@ function App() {
           element={
             <ProtectedRoute>
               <MessageConversationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookmarks"
+          element={
+            <ProtectedRoute>
+              <BookmarksPage />
             </ProtectedRoute>
           }
         />

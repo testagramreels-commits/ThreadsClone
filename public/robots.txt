@@ -1,5 +1,27 @@
+# Allow all search engines to crawl the site
 User-agent: *
 Allow: /
+
+# Crawl-delay for better server performance
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://www.onspace.ai/sitemap.xml
+Sitemap: https://www.onspace.ai/sitemap.txt
+
+# Allow Googlebot
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+# Allow Bingbot
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# Disallow admin areas
+Disallow: /admin
+Disallow: /profile/edit
 Allow: /login
 Allow: /search
 Allow: /profile/*

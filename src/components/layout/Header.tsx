@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AtSign, LogOut, Shield, Bell, MessageCircle } from 'lucide-react';
+import { AtSign, LogOut, Shield, Bell, MessageCircle, Bookmark } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -103,6 +103,10 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/profile/edit')}>
                   Edit Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/bookmarks')}>
+                  <Bookmark className="mr-2 h-4 w-4" />
+                  Bookmarks
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {isAdminUser && (

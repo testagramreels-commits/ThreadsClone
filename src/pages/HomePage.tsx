@@ -5,7 +5,8 @@ import { ThreadCard } from '@/components/features/ThreadCard';
 import { SuggestedContent } from '@/components/features/SuggestedContent';
 import { AdSlot } from '@/components/features/AdSlot';
 import { BottomNav } from '@/components/features/BottomNav';
-import { getThreads, getSuggestedUsers, getTrendingThreads, getFollowingThreads, getMentionThreads } from '@/lib/api';
+import { getMixedFeed, getThreadsOptimized } from '@/lib/optimizedApi';
+import { getSuggestedUsers, getTrendingThreads, getMentionThreads } from '@/lib/api';
 import { Thread, UserWithStats } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { Video } from 'lucide-react';
@@ -14,10 +15,6 @@ import { useNavigate } from 'react-router-dom';
 
 export function HomePage() {
   const [allThreads, setAllThreads] = useState<Thread[]>([]);
-  const [latestThreads, setLatestThreads] = useState<Thread[]>([]);
-  const [trendingThreads, setTrendingThreads] = useState<Thread[]>([]);
-  const [followingThreads, setFollowingThreads] = useState<Thread[]>([]);
-  const [mentionThreads, setMentionThreads] = useState<Thread[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<UserWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'latest' | 'trending' | 'following' | 'mentions'>('latest');
@@ -26,17 +23,26 @@ export function HomePage() {
 
   const loadThreads = async () => {
     try {
-      const [latest, trending, following, mentions] = await Promise.all([
-        getThreads(),
-        getTrendingThreads(),
-        getFollowingThreads(),
-        getMentionThreads(),
-      ]);
-      setLatestThreads(latest);
-      setTrendingThreads(trending);
-      setFollowingThreads(following);
-      setMentionThreads(mentions);
-      setAllThreads(latest);
+      let threads: Thread[];
+      
+      switch (activeTab) {
+        case 'trending':
+          threads = await getTrendingThreads();
+          break;
+        case 'following':
+          threads = await getThreadsOptimized(50, 0, undefined, true);
+          break;
+        case 'mentions':
+          threads = await getMentionThreads();
+          break;
+        case 'latest':
+        default:
+          // Use mixed feed that includes videos organically
+          threads = await getMixedFeed(50);
+          break;
+      }
+      
+      setAllThreads(threads);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -63,26 +69,13 @@ export function HomePage() {
 
   const handleTabChange = (tab: 'latest' | 'trending' | 'following' | 'mentions') => {
     setActiveTab(tab);
-    switch (tab) {
-      case 'latest':
-        setAllThreads(latestThreads);
-        break;
-      case 'trending':
-        setAllThreads(trendingThreads);
-        break;
-      case 'following':
-        setAllThreads(followingThreads);
-        break;
-      case 'mentions':
-        setAllThreads(mentionThreads);
-        break;
-    }
+    setLoading(true);
   };
 
   useEffect(() => {
     loadThreads();
     loadSuggestions();
-  }, []);
+  }, [activeTab]);
 
   // Suggestion intervals: after 4, 14, 29, 49 posts
   const getSuggestionPositions = () => {
@@ -170,7 +163,7 @@ export function HomePage() {
           ) : (
             allThreads.map((thread, index) => (
               <div key={thread.id}>
-                <ThreadCard thread={thread} />
+                <ThreadCard thread={thread} onUpdate={loadThreads} />
                 {shouldShowSuggestion(index + 1) && (
                   <SuggestedContent 
                     users={suggestedUsers} 
