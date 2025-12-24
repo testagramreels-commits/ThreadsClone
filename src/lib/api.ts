@@ -1296,68 +1296,6 @@ export async function isAdmin(): Promise<boolean> {
 }
 
 // Get platform analytics (admin only)
-// Reply interaction functions
-export async function toggleReplyLike(replyId: string): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be logged in to like replies');
-
-  const { data: existingLike } = await supabase
-    .from('reply_likes')
-    .select('id')
-    .eq('reply_id', replyId)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (existingLike) {
-    const { error } = await supabase
-      .from('reply_likes')
-      .delete()
-      .eq('id', existingLike.id);
-    if (error) throw error;
-    return false;
-  } else {
-    const { error } = await supabase
-      .from('reply_likes')
-      .insert({
-        reply_id: replyId,
-        user_id: user.id,
-      });
-    if (error) throw error;
-    return true;
-  }
-}
-
-export async function createReplyToReply(parentReplyId: string, content: string) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be logged in to reply');
-
-  // Get the parent reply to find the thread_id
-  const { data: parentReply } = await supabase
-    .from('thread_replies')
-    .select('thread_id')
-    .eq('id', parentReplyId)
-    .maybeSingle();
-
-  if (!parentReply) throw new Error('Parent reply not found');
-
-  const { data, error } = await supabase
-    .from('thread_replies')
-    .insert({
-      thread_id: parentReply.thread_id,
-      user_id: user.id,
-      content,
-      parent_reply_id: parentReplyId,
-    })
-    .select(`
-      *,
-      user:user_profiles(id, username, email, avatar_url, bio, website, location)
-    `)
-    .single();
-
-  if (error) throw error;
-  return data as ThreadReply;
-}
-
 export async function getPlatformAnalytics() {
   const { count: totalUsers } = await supabase
     .from('user_profiles')

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AtSign, LogOut, Shield, Bell, MessageCircle, Bookmark, TrendingUp } from 'lucide-react';
+import { AtSign, LogOut, Shield, Bell, MessageCircle, Bookmark } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -66,14 +66,6 @@ export function Header() {
         </div>
         {user && (
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden md:flex"
-              onClick={() => navigate('/trending')}
-            >
-              <TrendingUp className="h-5 w-5" />
-            </Button>
             <Button
               variant="ghost"
               size="icon"
