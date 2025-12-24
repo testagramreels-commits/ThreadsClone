@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Thread } from '@/types/database';
+import { getThreads } from './api';
 
 /**
  * Optimized API using database views for much faster loading
@@ -34,81 +35,95 @@ export async function getThreadsOptimized(
   mediaType?: 'text' | 'image' | 'video',
   followingOnly: boolean = false
 ): Promise<Thread[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-  // Use the optimized database function
-  const { data, error } = await supabase
-    .rpc('get_threads_with_stats', {
-      p_user_id: user?.id || null,
-      p_limit: limit,
-      p_offset: offset,
-      p_media_type: mediaType || null,
-      p_following_only: followingOnly
-    });
+    // Use the optimized database function
+    const { data, error } = await supabase
+      .rpc('get_threads_with_stats', {
+        p_user_id: user?.id || null,
+        p_limit: limit,
+        p_offset: offset,
+        p_media_type: mediaType || null,
+        p_following_only: followingOnly
+      });
 
-  if (error) {
-    console.error('Error fetching threads:', error);
-    throw error;
+    if (error) {
+      console.error('Error fetching threads with optimized function:', error);
+      // Fallback to regular API
+      console.log('Falling back to regular API');
+      return await getThreads();
+    }
+
+    // Transform the data to match Thread interface
+    const threads: Thread[] = (data as ThreadWithStats[] || []).map((t: ThreadWithStats) => ({
+      id: t.id,
+      user_id: t.user_id,
+      content: t.content,
+      image_url: t.image_url || undefined,
+      video_url: t.video_url || undefined,
+      media_type: t.media_type as 'text' | 'image' | 'video',
+      quote_thread_id: t.quote_thread_id || undefined,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
+      user: {
+        id: t.user_id,
+        username: t.username,
+        email: t.user_email,
+        avatar_url: t.user_avatar_url || undefined,
+      },
+      likes_count: Number(t.likes_count),
+      replies_count: Number(t.replies_count),
+      reposts_count: Number(t.reposts_count),
+      bookmarks_count: Number(t.bookmarks_count),
+      is_liked: t.is_liked,
+      is_reposted: t.is_reposted,
+      is_bookmarked: t.is_bookmarked,
+    }));
+
+    return threads;
+  } catch (error) {
+    console.error('Error in getThreadsOptimized:', error);
+    // Fallback to regular API
+    return await getThreads();
   }
-
-  // Transform the data to match Thread interface
-  const threads: Thread[] = (data as ThreadWithStats[] || []).map((t: ThreadWithStats) => ({
-    id: t.id,
-    user_id: t.user_id,
-    content: t.content,
-    image_url: t.image_url || undefined,
-    video_url: t.video_url || undefined,
-    media_type: t.media_type as 'text' | 'image' | 'video',
-    quote_thread_id: t.quote_thread_id || undefined,
-    created_at: t.created_at,
-    updated_at: t.updated_at,
-    user: {
-      id: t.user_id,
-      username: t.username,
-      email: t.user_email,
-      avatar_url: t.user_avatar_url || undefined,
-    },
-    likes_count: Number(t.likes_count),
-    replies_count: Number(t.replies_count),
-    reposts_count: Number(t.reposts_count),
-    bookmarks_count: Number(t.bookmarks_count),
-    is_liked: t.is_liked,
-    is_reposted: t.is_reposted,
-    is_bookmarked: t.is_bookmarked,
-  }));
-
-  return threads;
 }
 
 export async function getMixedFeed(limit: number = 50): Promise<Thread[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-  // Get mixed content: 70% text/images, 30% videos
-  const textLimit = Math.floor(limit * 0.7);
-  const videoLimit = Math.ceil(limit * 0.3);
+    // Get mixed content: 70% text/images, 30% videos
+    const textLimit = Math.floor(limit * 0.7);
+    const videoLimit = Math.ceil(limit * 0.3);
 
-  const [textThreads, videoThreads] = await Promise.all([
-    getThreadsOptimized(textLimit, 0, undefined, false),
-    getThreadsOptimized(videoLimit, 0, 'video', false)
-  ]);
+    const [textThreads, videoThreads] = await Promise.all([
+      getThreadsOptimized(textLimit, 0, undefined, false),
+      getThreadsOptimized(videoLimit, 0, 'video', false)
+    ]);
 
-  // Interleave videos organically into the feed
-  const mixed: Thread[] = [];
-  let textIndex = 0;
-  let videoIndex = 0;
+    // Interleave videos organically into the feed
+    const mixed: Thread[] = [];
+    let textIndex = 0;
+    let videoIndex = 0;
 
-  for (let i = 0; i < limit; i++) {
-    // Add a video every 5 posts
-    if (i > 0 && i % 5 === 0 && videoIndex < videoThreads.length) {
-      mixed.push(videoThreads[videoIndex++]);
-    } else if (textIndex < textThreads.length) {
-      mixed.push(textThreads[textIndex++]);
-    } else if (videoIndex < videoThreads.length) {
-      mixed.push(videoThreads[videoIndex++]);
+    for (let i = 0; i < limit; i++) {
+      // Add a video every 5 posts
+      if (i > 0 && i % 5 === 0 && videoIndex < videoThreads.length) {
+        mixed.push(videoThreads[videoIndex++]);
+      } else if (textIndex < textThreads.length) {
+        mixed.push(textThreads[textIndex++]);
+      } else if (videoIndex < videoThreads.length) {
+        mixed.push(videoThreads[videoIndex++]);
+      }
     }
-  }
 
-  return mixed;
+    return mixed;
+  } catch (error) {
+    console.error('Error in getMixedFeed:', error);
+    // Fallback to regular API
+    return await getThreads();
+  }
 }
 
 // Bookmark functions
