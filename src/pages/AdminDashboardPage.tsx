@@ -188,7 +188,7 @@ export function AdminDashboardPage() {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <main className="container max-w-6xl mx-auto pb-20 md:pb-4 p-4">
+      <main className="container max-w-6xl mx-auto pb-20 md:pb-4 p-4 overflow-x-hidden">
         <div className="mb-6">
           <Button
             variant="ghost"
@@ -287,12 +287,12 @@ export function AdminDashboardPage() {
 
         <Card className="mb-4">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <CardTitle>AdSense Management</CardTitle>
-                <CardDescription>Manage your Google AdSense ad placements</CardDescription>
+                <CardTitle className="text-lg md:text-xl">AdSense Management</CardTitle>
+                <CardDescription className="text-sm">Manage your Google AdSense ad placements</CardDescription>
               </div>
-              <Button onClick={handleCreateAd}>
+              <Button onClick={handleCreateAd} className="w-full md:w-auto">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Ad
               </Button>
@@ -306,50 +306,59 @@ export function AdminDashboardPage() {
             ) : (
               <div className="space-y-4">
                 {ads.map((ad) => (
-                  <div key={ad.id} className="border rounded-lg p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{ad.name}</h3>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            ad.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {ad.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                            {ad.position}
-                          </span>
+                  <div key={ad.id} className="border rounded-lg p-4 hover:border-primary transition-colors">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <h3 className="font-semibold text-base">{ad.name}</h3>
+                            <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
+                              ad.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
+                            }`}>
+                              {ad.is_active ? '● Active' : '○ Inactive'}
+                            </span>
+                            <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 capitalize whitespace-nowrap">
+                              {ad.position}
+                            </span>
+                          </div>
+                          <div className="bg-muted/50 rounded p-2 mt-2 overflow-hidden">
+                            <p className="text-xs text-muted-foreground font-mono break-all line-clamp-2">
+                              {ad.ad_code.substring(0, 150)}...
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1 font-mono">
-                          {ad.ad_code.substring(0, 100)}...
-                        </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleToggleAd(ad)}
+                          className="flex-1 md:flex-none"
                         >
                           {ad.is_active ? 'Deactivate' : 'Activate'}
                         </Button>
                         <Button
                           variant="outline"
-                          size="icon"
+                          size="sm"
                           onClick={() => handleEditAd(ad)}
+                          className="flex-1 md:flex-none"
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
                         </Button>
                         <Button
-                          variant="outline"
-                          size="icon"
+                          variant="destructive"
+                          size="sm"
                           onClick={() => handleDeleteAd(ad.id)}
+                          className="flex-1 md:flex-none"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
                         </Button>
                       </div>
                     </div>
                   </div>
-                ))}
+                ))})
               </div>
             )}
           </CardContent>
@@ -357,27 +366,100 @@ export function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Google AdSense Setup Guide</CardTitle>
-            <CardDescription>How to get started with AdSense monetization</CardDescription>
+            <CardTitle className="text-lg md:text-xl">🚀 Quick Start Guide: AdSense Integration</CardTitle>
+            <CardDescription className="text-sm">Follow these steps to monetize your platform with Google AdSense</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <ol className="list-decimal list-inside space-y-2 text-sm">
-                <li>Sign up for Google AdSense at <a href="https://www.google.com/adsense" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">google.com/adsense</a></li>
-                <li>Get approved and receive your AdSense publisher ID</li>
-                <li>Create ad units in your AdSense dashboard</li>
-                <li>Copy the ad code from AdSense</li>
-                <li>Paste the ad code here by clicking "Add Ad" above</li>
-                <li>Choose the position where you want the ad to appear</li>
-                <li>Ads will automatically display on your platform</li>
-              </ol>
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-2">Recommended Ad Positions:</p>
+            <div className="space-y-6">
+              {/* Step-by-step guide with better visual hierarchy */}
+              <div className="space-y-4">
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-1">Sign up for AdSense</h4>
+                    <p className="text-sm text-muted-foreground">Visit <a href="https://www.google.com/adsense" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">google.com/adsense</a> and create an account</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-1">Get Approved</h4>
+                    <p className="text-sm text-muted-foreground">Submit your site for review and wait for approval (usually 1-2 weeks)</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-1">Create Ad Units</h4>
+                    <p className="text-sm text-muted-foreground">In your AdSense dashboard, create new ad units (Display Ads or In-feed Ads work best)</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">4</div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-1">Copy Ad Code</h4>
+                    <p className="text-sm text-muted-foreground">Copy the entire ad code snippet from AdSense (starts with &lt;script&gt; or &lt;ins&gt;)</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">5</div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-1">Add to Your Platform</h4>
+                    <p className="text-sm text-muted-foreground">Click "Add Ad" button above, paste your code, select position, and activate!</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ad positions guide with icons */}
+              <div className="p-4 bg-gradient-to-br from-primary/5 to-purple-500/5 rounded-lg border">
+                <p className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Recommended Ad Positions:
+                </p>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div className="flex gap-2 text-sm">
+                    <div className="flex-shrink-0 text-primary">●</div>
+                    <div>
+                      <strong className="font-medium">Feed:</strong>
+                      <p className="text-muted-foreground">Between threads (every 7 posts) - Highest visibility</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 text-sm">
+                    <div className="flex-shrink-0 text-primary">●</div>
+                    <div>
+                      <strong className="font-medium">Profile:</strong>
+                      <p className="text-muted-foreground">Below profile info - High engagement</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 text-sm">
+                    <div className="flex-shrink-0 text-primary">●</div>
+                    <div>
+                      <strong className="font-medium">Video:</strong>
+                      <p className="text-muted-foreground">Video pages - Premium placement</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 text-sm">
+                    <div className="flex-shrink-0 text-primary">●</div>
+                    <div>
+                      <strong className="font-medium">Sidebar:</strong>
+                      <p className="text-muted-foreground">Desktop only - Persistent visibility</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tips section */}
+              <div className="p-4 bg-muted/50 rounded-lg">
+                <p className="text-sm font-semibold mb-2">💡 Pro Tips:</p>
                 <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                  <li><strong>Feed:</strong> Between threads in the main feed (appears after every 7 posts)</li>
-                  <li><strong>Profile:</strong> Below user profile information</li>
-                  <li><strong>Video:</strong> Before or after video content</li>
-                  <li><strong>Sidebar:</strong> Fixed position on desktop sidebar (desktop only)</li>
+                  <li>Start with 1-2 ad placements and test performance</li>
+                  <li>Use responsive ad units for best mobile experience</li>
+                  <li>Check AdSense dashboard regularly for earnings and insights</li>
+                  <li>Follow AdSense policies to avoid account suspension</li>
                 </ul>
               </div>
             </div>

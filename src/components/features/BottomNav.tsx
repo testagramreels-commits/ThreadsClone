@@ -59,7 +59,13 @@ export function BottomNav() {
           variant="ghost" 
           size="icon" 
           className={`h-12 w-12 ${isActive(`/profile/${user?.username}`) ? '' : 'text-muted-foreground'}`}
-          onClick={() => user && navigate(`/profile/${user.username}`)}
+          onClick={() => {
+            if (user?.username) {
+              navigate(`/profile/${user.username}`);
+            } else {
+              navigate('/login');
+            }
+          }}
         >
           <User className="h-6 w-6" />
         </Button>
