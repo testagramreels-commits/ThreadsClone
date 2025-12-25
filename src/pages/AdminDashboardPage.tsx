@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, FileText, Heart, MessageCircle, 
-  Share2, Video, TrendingUp, BarChart3, Plus, Edit, Trash2
+  Share2, Video, TrendingUp, BarChart3, Plus, Edit, Trash2, HardDrive, CheckCircle, XCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +40,7 @@ export function AdminDashboardPage() {
     ad_code: '',
     position: 'feed' as 'feed' | 'sidebar' | 'profile' | 'video',
   });
+  const [backblazeStatus, setBackblazeStatus] = useState<'checking' | 'configured' | 'not-configured'>('checking');
 
   useEffect(() => {
     checkAccess();
@@ -60,6 +61,7 @@ export function AdminDashboardPage() {
       setHasAccess(true);
       await loadStats();
       await loadAds();
+      checkBackblazeStatus();
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -67,6 +69,17 @@ export function AdminDashboardPage() {
         variant: 'destructive',
       });
       navigate('/');
+    }
+  };
+
+  const checkBackblazeStatus = async () => {
+    try {
+      const { isBackblazeConfigured } = await import('@/lib/backblaze');
+      const configured = await isBackblazeConfigured();
+      setBackblazeStatus(configured ? 'configured' : 'not-configured');
+    } catch (error) {
+      console.error('Failed to check Backblaze status:', error);
+      setBackblazeStatus('not-configured');
     }
   };
 
@@ -359,6 +372,55 @@ export function AdminDashboardPage() {
                     </div>
                   </div>
                 ))})
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle className="text-lg md:text-xl flex items-center gap-2">
+              <HardDrive className="h-5 w-5" />
+              Backblaze Storage Status
+            </CardTitle>
+            <CardDescription className="text-sm">Unlimited cloud storage for your videos and media</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center gap-3">
+                {backblazeStatus === 'checking' && (
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                )}
+                {backblazeStatus === 'configured' && (
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                )}
+                {backblazeStatus === 'not-configured' && (
+                  <XCircle className="h-6 w-6 text-red-600" />
+                )}
+                <div>
+                  <p className="font-semibold">
+                    {backblazeStatus === 'checking' && 'Checking status...'}
+                    {backblazeStatus === 'configured' && 'Backblaze Connected ✓'}
+                    {backblazeStatus === 'not-configured' && 'Not Connected'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {backblazeStatus === 'configured' && 'Videos are automatically uploaded to Backblaze B2 storage'}
+                    {backblazeStatus === 'not-configured' && 'Videos are stored in Supabase (limited capacity)'}
+                  </p>
+                </div>
+              </div>
+              {backblazeStatus === 'configured' && (
+                <div className="text-right">
+                  <p className="text-sm font-medium text-green-600">Active</p>
+                  <p className="text-xs text-muted-foreground">Unlimited storage</p>
+                </div>
+              )}
+            </div>
+            {backblazeStatus === 'configured' && (
+              <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <p className="text-sm text-green-800 dark:text-green-200">
+                  ✓ All video uploads are automatically stored in Backblaze B2 with unlimited capacity and faster CDN delivery.
+                </p>
               </div>
             )}
           </CardContent>

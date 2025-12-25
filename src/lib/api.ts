@@ -417,24 +417,34 @@ export async function uploadVideo(file: File): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('You must be logged in to upload videos');
 
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+  // Try Backblaze first for better storage capacity, fallback to Supabase
+  try {
+    const { uploadVideoToBackblaze } = await import('./backblaze');
+    const url = await uploadVideoToBackblaze(file);
+    console.log('Video uploaded to Backblaze:', url);
+    return url;
+  } catch (backblazeError) {
+    console.warn('Backblaze upload failed, falling back to Supabase:', backblazeError);
+    
+    // Fallback to Supabase Storage
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
-  // Show upload progress
-  const { data, error } = await supabase.storage
-    .from('videos')
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false
-    });
+    const { data, error } = await supabase.storage
+      .from('videos')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('videos')
-    .getPublicUrl(fileName);
+    const { data: { publicUrl } } = supabase.storage
+      .from('videos')
+      .getPublicUrl(fileName);
 
-  return publicUrl;
+    return publicUrl;
+  }
 }
 
 export async function updateUserProfile(updates: Partial<UserProfile>) {
