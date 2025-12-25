@@ -41,20 +41,34 @@ export function UserSuggestionCard({ user, onFollowChange }: UserSuggestionCardP
 
   return (
     <div 
-      className="flex items-center justify-between p-4 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+      className="flex items-center justify-between p-3 hover:bg-card/80 rounded-xl transition-all cursor-pointer border border-transparent hover:border-primary/20 hover:shadow-md group"
       onClick={() => navigate(`/profile/${user.username}`)}
     >
-      <div className="flex items-center gap-3 flex-1">
-        <Avatar className="h-12 w-12 ring-2 ring-background">
-          <AvatarImage src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`} />
-          <AvatarFallback>{user.username?.[0]?.toUpperCase()}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1">
-          <p className="font-semibold">{user.username}</p>
-          <p className="text-sm text-muted-foreground">@{user.username}</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {user.followers_count || 0} followers · {user.threads_count || 0} threads
-          </p>
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="relative">
+          <Avatar className="h-14 w-14 ring-2 ring-background shadow-md">
+            <AvatarImage src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`} />
+            <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white font-bold">
+              {user.username?.[0]?.toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          {(user.threads_count || 0) > 10 && (
+            <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
+              ✓
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-base truncate group-hover:text-primary transition-colors">{user.username}</p>
+          <p className="text-sm text-muted-foreground truncate">@{user.username}</p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">{user.followers_count || 0}</span> followers
+            </p>
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">{user.threads_count || 0}</span> threads
+            </p>
+          </div>
         </div>
       </div>
       <Button
@@ -62,9 +76,15 @@ export function UserSuggestionCard({ user, onFollowChange }: UserSuggestionCardP
         disabled={loading}
         variant={isFollowing ? 'outline' : 'default'}
         size="sm"
-        className="rounded-full"
+        className="rounded-full font-semibold shadow-sm hover:shadow-md transition-all flex-shrink-0"
       >
-        {isFollowing ? 'Following' : 'Follow'}
+        {loading ? (
+          <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        ) : isFollowing ? (
+          'Following'
+        ) : (
+          '+ Follow'
+        )}
       </Button>
     </div>
   );
