@@ -1,0 +1,6 @@
+{
+  "appId": "com.testagramreels.threadsclone",
+  "appName": "ThreadsClone",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

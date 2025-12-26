@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ThreadsClone</string>
+    <string name="title_activity_main">ThreadsClone</string>
+    <string name="package_name">com.testagramreels.threadsclone</string>
+    <string name="custom_url_scheme">com.testagramreels.threadsclone</string>
+</resources>
