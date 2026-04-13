@@ -13,6 +13,7 @@ import { NotificationsPage } from '@/pages/NotificationsPage';
 import { MessagesPage } from '@/pages/MessagesPage';
 import { MessageConversationPage } from '@/pages/MessageConversationPage';
 import { BookmarksPage } from '@/pages/BookmarksPage';
+import { SettingsPage } from '@/pages/SettingsPage';
 import { Toaster } from '@/components/ui/toaster';
 import { Component, ReactNode } from 'react';
 
@@ -89,6 +90,14 @@ function App() {
           }
         />
         <Route
+          path="/profile/edit"
+          element={
+            <ProtectedRoute>
+              <EditProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/profile/:username"
           element={
             <ProtectedRoute>
@@ -101,14 +110,6 @@ function App() {
           element={
             <ProtectedRoute>
               <ThreadDetailPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile/edit"
-          element={
-            <ProtectedRoute>
-              <EditProfilePage />
             </ProtectedRoute>
           }
         />
@@ -176,6 +177,15 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Toaster />
     </BrowserRouter>

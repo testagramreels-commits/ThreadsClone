@@ -3,33 +3,36 @@ import { useNavigate } from 'react-router-dom';
 interface ThreadContentProps {
   content: string;
   className?: string;
+  expandable?: boolean;
 }
 
-export function ThreadContent({ content, className = '' }: ThreadContentProps) {
+export function ThreadContent({ content, className = '', expandable = false }: ThreadContentProps) {
   const navigate = useNavigate();
 
-  const parseContent = (text: string) => {
+  const MAX_LEN = 280;
+  const isLong = expandable && content.length > MAX_LEN;
+
+  const parseContent = (text: string): React.ReactNode[] => {
     const parts: React.ReactNode[] = [];
-    const regex = /(#\w+|@\w+)/g;
+    // Match hashtags, mentions and URLs
+    const regex = /(https?:\/\/[^\s]+|#\w+|@\w+)/g;
     let lastIndex = 0;
-    let match;
+    let match: RegExpExecArray | null;
 
     while ((match = regex.exec(text)) !== null) {
-      // Add text before the match
       if (match.index > lastIndex) {
         parts.push(text.substring(lastIndex, match.index));
       }
 
       const token = match[0];
+
       if (token.startsWith('#')) {
-        // Hashtag
         parts.push(
           <span
-            key={match.index}
-            className="text-primary hover:underline cursor-pointer font-medium"
+            key={`h-${match.index}`}
+            className="content-hashtag"
             onClick={(e) => {
               e.stopPropagation();
-              // Navigate to search with hashtag
               navigate(`/search?q=${encodeURIComponent(token)}`);
             }}
           >
@@ -37,36 +40,49 @@ export function ThreadContent({ content, className = '' }: ThreadContentProps) {
           </span>
         );
       } else if (token.startsWith('@')) {
-        // Mention
         parts.push(
           <span
-            key={match.index}
-            className="text-primary hover:underline cursor-pointer font-medium"
+            key={`m-${match.index}`}
+            className="content-mention"
             onClick={(e) => {
               e.stopPropagation();
-              // Navigate to user profile
               navigate(`/profile/${token.substring(1)}`);
             }}
           >
             {token}
           </span>
         );
+      } else if (token.startsWith('http')) {
+        parts.push(
+          <a
+            key={`u-${match.index}`}
+            href={token}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:underline break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {token.replace(/^https?:\/\//, '').replace(/\/$/, '').substring(0, 40)}
+            {token.length > 40 ? '…' : ''}
+          </a>
+        );
       }
 
       lastIndex = regex.lastIndex;
     }
 
-    // Add remaining text
     if (lastIndex < text.length) {
       parts.push(text.substring(lastIndex));
     }
 
-    return parts.length > 0 ? parts : text;
+    return parts.length > 0 ? parts : [text];
   };
 
+  const displayContent = isLong ? content.substring(0, MAX_LEN) + '…' : content;
+
   return (
-    <p className={`text-base leading-relaxed whitespace-pre-wrap ${className}`}>
-      {parseContent(content)}
+    <p className={`text-[15px] leading-relaxed whitespace-pre-wrap break-words ${className}`}>
+      {parseContent(displayContent)}
     </p>
   );
 }
