@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Heart, MessageCircle, Repeat2, Send, MoreHorizontal } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, MoreHorizontal } from 'lucide-react';
 import { Thread } from '@/types/database';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { ThreadContent } from './ThreadContent';
 import { BookmarkButton } from './BookmarkButton';
 import { QuoteThreadButton } from './QuoteThreadButton';
+import { QuotedThreadPreview } from './QuotedThreadPreview';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,14 +42,8 @@ export function ThreadCard({ thread, isDetailView = false, onUpdate }: ThreadCar
       setIsLiked(liked);
       setLikes(liked ? likes + 1 : likes - 1);
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally { setLoading(false); }
   };
 
   const handleRepost = async (e: React.MouseEvent) => {
@@ -58,186 +53,184 @@ export function ThreadCard({ thread, isDetailView = false, onUpdate }: ThreadCar
       const reposted = await toggleThreadRepost(thread.id);
       setIsReposted(reposted);
       setReposts(reposted ? reposts + 1 : reposts - 1);
-      toast({
-        title: reposted ? 'Reposted!' : 'Unreposted',
-        description: reposted ? 'Thread has been reposted to your profile' : 'Thread removed from your reposts',
-      });
+      toast({ title: reposted ? 'Reposted!' : 'Unreposted' });
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally { setLoading(false); }
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/thread/${thread.id}`;
+    if (navigator.share) {
+      navigator.share({ title: `@${thread.user?.username}`, text: thread.content, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copied!' });
     }
   };
 
   const handleMute = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!thread.user?.id) return;
-    
     try {
       const muted = await toggleMute(thread.user.id);
-      toast({
-        title: muted ? 'User Muted' : 'User Unmuted',
-        description: muted ? `You won't see posts from @${thread.user.username}` : `You'll now see posts from @${thread.user.username}`,
-      });
+      toast({ title: muted ? 'User Muted' : 'User Unmuted' });
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
   };
 
   const handleBlock = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!thread.user?.id) return;
-    
     try {
       const blocked = await toggleBlock(thread.user.id);
-      toast({
-        title: blocked ? 'User Blocked' : 'User Unblocked',
-        description: blocked ? `@${thread.user.username} has been blocked` : `@${thread.user.username} has been unblocked`,
-      });
+      toast({ title: blocked ? 'User Blocked' : 'User Unblocked' });
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Don't navigate if clicking on interactive elements
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('a')) return;
-    if (!isDetailView) {
-      navigate(`/thread/${thread.id}`);
-    }
+    if (!isDetailView) navigate(`/thread/${thread.id}`);
   };
 
   return (
-    <article 
-      className={`border-b p-4 transition-colors animate-fade-in ${
-        !isDetailView ? 'hover:bg-accent/50 cursor-pointer' : ''
-      }`}
+    <article
+      className={`p-4 transition-colors animate-fade-in ${!isDetailView ? 'hover:bg-accent/30 cursor-pointer' : ''}`}
       onClick={handleCardClick}
     >
       <div className="flex gap-3">
-        <Avatar 
-          className="h-10 w-10 ring-2 ring-background cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/profile/${thread.user?.username}`);
-          }}
+        <Avatar
+          className="h-10 w-10 flex-shrink-0 ring-2 ring-background cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); navigate(`/profile/${thread.user?.username}`); }}
         >
           <AvatarImage src={thread.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${thread.user?.username}`} />
-          <AvatarFallback>{thread.user?.username?.[0]?.toUpperCase()}</AvatarFallback>
+          <AvatarFallback className="font-bold text-sm bg-gradient-to-br from-primary to-purple-600 text-white">
+            {thread.user?.username?.[0]?.toUpperCase()}
+          </AvatarFallback>
         </Avatar>
-        
-        <div className="flex-1 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span 
+
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+              <span
                 className="font-semibold text-sm cursor-pointer hover:underline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/profile/${thread.user?.username}`);
-                }}
+                onClick={(e) => { e.stopPropagation(); navigate(`/profile/${thread.user?.username}`); }}
               >
                 {thread.user?.username}
               </span>
-              <span className="text-muted-foreground text-sm">@{thread.user?.username}</span>
-              <span className="text-muted-foreground text-sm">·</span>
-              <span className="text-muted-foreground text-sm">
+              <span className="text-muted-foreground text-xs">·</span>
+              <span className="text-muted-foreground text-xs">
                 {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
               </span>
             </div>
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-foreground rounded-full"
+                  onClick={e => e.stopPropagation()}
+                >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleMute}>
-                  Mute @{thread.user?.username}
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleShare}>Share</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleMute}>Mute @{thread.user?.username}</DropdownMenuItem>
                 <DropdownMenuItem onClick={handleBlock} className="text-destructive">
                   Block @{thread.user?.username}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          
+
           <ThreadContent content={thread.content} />
-          
+
+          {/* Quoted thread preview */}
+          {thread.quote_thread_id && (
+            <QuotedThreadPreview quoteThreadId={thread.quote_thread_id} />
+          )}
+
+          {/* Media */}
           {thread.image_url && (
-            <img 
-              src={thread.image_url} 
-              alt="Thread image" 
-              className="rounded-xl w-full max-h-96 object-cover mt-3"
+            <img
+              src={thread.image_url}
+              alt="Thread image"
+              className="rounded-xl w-full max-h-80 object-cover mt-1"
+              loading="lazy"
             />
           )}
-          
           {thread.video_url && (
-            <video 
-              src={thread.video_url} 
+            <video
+              src={thread.video_url}
               controls
-              className="rounded-xl w-full max-h-96 object-cover mt-3"
+              preload="metadata"
+              className="rounded-xl w-full max-h-80 object-cover mt-1"
             />
           )}
-          
-          <div className="flex items-center gap-1 pt-2">
+
+          {/* Action bar */}
+          <div className="flex items-center gap-0 pt-0.5 -ml-2">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleLike}
               disabled={loading}
-              className={`gap-2 hover:text-red-500 transition-colors ${
-                isLiked ? 'text-red-500' : 'text-muted-foreground'
+              className={`h-8 gap-1.5 px-2 rounded-full text-xs font-medium transition-colors ${
+                isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30'
               }`}
             >
-              <Heart className={`h-5 w-5 ${isLiked ? 'fill-current' : ''}`} />
-              <span className="text-sm">{likes}</span>
+              <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
+              {likes > 0 && <span>{likes}</span>}
             </Button>
-            
-            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-              <MessageCircle className="h-5 w-5" />
-              <span className="text-sm">{thread.replies_count || 0}</span>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); navigate(`/thread/${thread.id}`); }}
+              className="h-8 gap-1.5 px-2 rounded-full text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {(thread.replies_count || 0) > 0 && <span>{thread.replies_count}</span>}
             </Button>
-            
+
             <Button
               variant="ghost"
               size="sm"
               onClick={handleRepost}
               disabled={loading}
-              className={`gap-2 hover:text-green-500 transition-colors ${
-                isReposted ? 'text-green-500' : 'text-muted-foreground'
+              className={`h-8 gap-1.5 px-2 rounded-full text-xs font-medium transition-colors ${
+                isReposted ? 'text-green-500' : 'text-muted-foreground hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-950/30'
               }`}
             >
-              <Repeat2 className={`h-5 w-5 ${isReposted ? 'fill-current' : ''}`} />
-              <span className="text-sm">{reposts}</span>
+              <Repeat2 className={`h-4 w-4 ${isReposted ? 'fill-current' : ''}`} />
+              {reposts > 0 && <span>{reposts}</span>}
             </Button>
-            
+
             <QuoteThreadButton thread={thread} onSuccess={onUpdate} />
-            
-            <BookmarkButton 
-              threadId={thread.id} 
+
+            <BookmarkButton
+              threadId={thread.id}
               isBookmarked={thread.is_bookmarked}
               bookmarksCount={thread.bookmarks_count}
               onToggle={onUpdate}
             />
-            
-            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-              <Send className="h-5 w-5" />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleShare}
+              className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground ml-auto"
+            >
+              <Share2 className="h-4 w-4" />
             </Button>
           </div>
         </div>

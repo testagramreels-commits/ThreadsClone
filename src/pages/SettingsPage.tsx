@@ -177,12 +177,24 @@ export function SettingsPage() {
     },
   ];
 
+  const handleEnablePush = async () => {
+    const { requestNotificationPermission } = await import('@/lib/notifications');
+    const perm = await requestNotificationPermission();
+    if (perm === 'granted') {
+      setNotifications(true);
+      localStorage.setItem('pref_notifications', 'true');
+      toast({ title: 'Push notifications enabled!' });
+    } else {
+      toast({ title: 'Blocked', description: 'Enable notifications in browser settings.', variant: 'destructive' });
+    }
+  };
+
   const notifItems: SettingRow[] = [
     {
       label: 'Push Notifications',
-      description: 'Likes, replies, follows',
+      description: 'Likes, replies, follows in real-time',
       icon: <Bell className="h-4 w-4" />,
-      toggle: { value: notifications, onChange: handleNotifications },
+      toggle: { value: notifications, onChange: (v) => { handleNotifications(v); if (v) handleEnablePush(); } },
     },
     {
       label: 'Messages',

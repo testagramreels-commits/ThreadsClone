@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { Thread } from '@/types/database';
 import { getThreads } from './api';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 /**
  * Optimized API using database views for much faster loading
@@ -29,8 +30,35 @@ interface ThreadWithStats {
   is_bookmarked: boolean;
 }
 
+function mapThread(t: ThreadWithStats): Thread {
+  return {
+    id: t.id,
+    user_id: t.user_id,
+    content: t.content,
+    image_url: t.image_url || undefined,
+    video_url: t.video_url || undefined,
+    media_type: t.media_type as 'text' | 'image' | 'video',
+    quote_thread_id: t.quote_thread_id || undefined,
+    created_at: t.created_at,
+    updated_at: t.updated_at,
+    user: {
+      id: t.user_id,
+      username: t.username,
+      email: t.user_email,
+      avatar_url: t.user_avatar_url || undefined,
+    },
+    likes_count: Number(t.likes_count),
+    replies_count: Number(t.replies_count),
+    reposts_count: Number(t.reposts_count),
+    bookmarks_count: Number(t.bookmarks_count),
+    is_liked: t.is_liked,
+    is_reposted: t.is_reposted,
+    is_bookmarked: t.is_bookmarked,
+  };
+}
+
 export async function getThreadsOptimized(
-  limit: number = 50,
+  limit: number = 20,
   offset: number = 0,
   mediaType?: 'text' | 'image' | 'video',
   followingOnly: boolean = false
@@ -38,90 +66,63 @@ export async function getThreadsOptimized(
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Use the optimized database function
+    // Try Edge Function first for best performance (cached at edge)
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+        ...(mediaType ? { media_type: mediaType } : {}),
+        ...(followingOnly ? { following_only: 'true' } : {}),
+      });
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/feed?${params}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(8000),
+        }
+      );
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) return (json.data as ThreadWithStats[]).map(mapThread);
+      }
+    } catch (edgeErr) {
+      console.warn('Edge function unavailable, falling back to RPC:', edgeErr);
+    }
+
+    // Fallback: direct RPC
     const { data, error } = await supabase
       .rpc('get_threads_with_stats', {
         p_user_id: user?.id || null,
         p_limit: limit,
         p_offset: offset,
         p_media_type: mediaType || null,
-        p_following_only: followingOnly
+        p_following_only: followingOnly,
       });
 
     if (error) {
-      console.error('Error fetching threads with optimized function:', error);
-      // Fallback to regular API
-      console.log('Falling back to regular API');
+      console.error('RPC error:', error);
       return await getThreads();
     }
 
-    // Transform the data to match Thread interface
-    const threads: Thread[] = (data as ThreadWithStats[] || []).map((t: ThreadWithStats) => ({
-      id: t.id,
-      user_id: t.user_id,
-      content: t.content,
-      image_url: t.image_url || undefined,
-      video_url: t.video_url || undefined,
-      media_type: t.media_type as 'text' | 'image' | 'video',
-      quote_thread_id: t.quote_thread_id || undefined,
-      created_at: t.created_at,
-      updated_at: t.updated_at,
-      user: {
-        id: t.user_id,
-        username: t.username,
-        email: t.user_email,
-        avatar_url: t.user_avatar_url || undefined,
-      },
-      likes_count: Number(t.likes_count),
-      replies_count: Number(t.replies_count),
-      reposts_count: Number(t.reposts_count),
-      bookmarks_count: Number(t.bookmarks_count),
-      is_liked: t.is_liked,
-      is_reposted: t.is_reposted,
-      is_bookmarked: t.is_bookmarked,
-    }));
-
-    return threads;
+    return (data as ThreadWithStats[] || []).map(mapThread);
   } catch (error) {
     console.error('Error in getThreadsOptimized:', error);
-    // Fallback to regular API
     return await getThreads();
   }
 }
 
-export async function getMixedFeed(limit: number = 50): Promise<Thread[]> {
+export async function getMixedFeed(limit: number = 20, offset: number = 0): Promise<Thread[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Get mixed content: 70% text/images, 30% videos
-    const textLimit = Math.floor(limit * 0.7);
-    const videoLimit = Math.ceil(limit * 0.3);
-
-    const [textThreads, videoThreads] = await Promise.all([
-      getThreadsOptimized(textLimit, 0, undefined, false),
-      getThreadsOptimized(videoLimit, 0, 'video', false)
-    ]);
-
-    // Interleave videos organically into the feed
-    const mixed: Thread[] = [];
-    let textIndex = 0;
-    let videoIndex = 0;
-
-    for (let i = 0; i < limit; i++) {
-      // Add a video every 5 posts
-      if (i > 0 && i % 5 === 0 && videoIndex < videoThreads.length) {
-        mixed.push(videoThreads[videoIndex++]);
-      } else if (textIndex < textThreads.length) {
-        mixed.push(textThreads[textIndex++]);
-      } else if (videoIndex < videoThreads.length) {
-        mixed.push(videoThreads[videoIndex++]);
-      }
-    }
-
-    return mixed;
+    return await getThreadsOptimized(limit, offset, undefined, false);
   } catch (error) {
     console.error('Error in getMixedFeed:', error);
-    // Fallback to regular API
     return await getThreads();
   }
 }
@@ -136,7 +137,7 @@ export async function toggleBookmark(threadId: string): Promise<boolean> {
     .select('id')
     .eq('thread_id', threadId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     await supabase.from('bookmarks').delete().eq('id', existing.id);
@@ -154,50 +155,34 @@ export async function getBookmarkedThreads(): Promise<Thread[]> {
   const { data: bookmarks } = await supabase
     .from('bookmarks')
     .select('thread_id')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
 
   if (!bookmarks || bookmarks.length === 0) return [];
 
   const threadIds = bookmarks.map(b => b.thread_id);
-  
-  const { data } = await supabase
+
+  const { data, error } = await supabase
     .rpc('get_threads_with_stats', {
       p_user_id: user.id,
       p_limit: 100,
       p_offset: 0,
+      p_media_type: null,
+      p_following_only: false,
     });
 
-  if (!data) return [];
+  if (error || !data) return [];
 
-  // Filter to only bookmarked threads
   const bookmarkedThreads = (data as ThreadWithStats[])
     .filter((t: ThreadWithStats) => threadIds.includes(t.id))
-    .map((t: ThreadWithStats) => ({
-      id: t.id,
-      user_id: t.user_id,
-      content: t.content,
-      image_url: t.image_url || undefined,
-      video_url: t.video_url || undefined,
-      media_type: t.media_type as 'text' | 'image' | 'video',
-      quote_thread_id: t.quote_thread_id || undefined,
-      created_at: t.created_at,
-      updated_at: t.updated_at,
-      user: {
-        id: t.user_id,
-        username: t.username,
-        email: t.user_email,
-        avatar_url: t.user_avatar_url || undefined,
-      },
-      likes_count: Number(t.likes_count),
-      replies_count: Number(t.replies_count),
-      reposts_count: Number(t.reposts_count),
-      bookmarks_count: Number(t.bookmarks_count),
-      is_liked: t.is_liked,
-      is_reposted: t.is_reposted,
-      is_bookmarked: t.is_bookmarked,
-    }));
+    .map(mapThread);
 
-  return bookmarkedThreads;
+  // Maintain original bookmark order
+  const ordered = threadIds
+    .map(id => bookmarkedThreads.find(t => t.id === id))
+    .filter(Boolean) as Thread[];
+
+  return ordered;
 }
 
 // Mute/Block functions
@@ -210,7 +195,7 @@ export async function toggleMute(userId: string): Promise<boolean> {
     .select('id')
     .eq('muted_user_id', userId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     await supabase.from('muted_users').delete().eq('id', existing.id);
@@ -230,7 +215,7 @@ export async function toggleBlock(userId: string): Promise<boolean> {
     .select('id')
     .eq('blocked_user_id', userId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     await supabase.from('blocked_users').delete().eq('id', existing.id);
