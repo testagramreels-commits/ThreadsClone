@@ -1,4 +1,12 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from 'react-router-dom';
+
 import { useAuth } from '@/hooks/useAuth';
 import { LoginPage } from '@/pages/LoginPage';
 import { HomePage } from '@/pages/HomePage';
@@ -14,9 +22,29 @@ import { MessagesPage } from '@/pages/MessagesPage';
 import { MessageConversationPage } from '@/pages/MessageConversationPage';
 import { BookmarksPage } from '@/pages/BookmarksPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+
 import { Toaster } from '@/components/ui/toaster';
-import { Component, ReactNode, useEffect } from 'react';
+
+import React, { Component, ReactNode, useEffect } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
+
+/* =========================
+   FIREBASE (FCM WEB PUSH)
+========================= */
+import { initializeApp } from 'firebase/app';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+
+const firebaseConfig = {
+  apiKey: 'YOUR_API_KEY',
+  authDomain: 'YOUR_PROJECT.firebaseapp.com',
+  projectId: 'YOUR_PROJECT_ID',
+  storageBucket: 'YOUR_PROJECT.appspot.com',
+  messagingSenderId: '31488412729',
+  appId: 'YOUR_APP_ID',
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const messaging = getMessaging(firebaseApp);
 
 /* =========================
    ERROR BOUNDARY
@@ -47,11 +75,11 @@ class ErrorBoundary extends Component<
               Something went wrong
             </h1>
             <p className="text-muted-foreground">
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {this.state.error?.message}
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
             >
               Reload App
             </button>
@@ -73,52 +101,81 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 }
 
 /* =========================
-   BACK BUTTON HANDLER (FIXED)
+   BACK BUTTON HANDLER
 ========================= */
 function BackButtonHandler() {
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    let listener: any;
+    const listenerPromise = CapacitorApp.addListener('backButton', () => {
+      const rootPaths = ['/', '/home'];
 
-    const setup = async () => {
-      listener = await CapacitorApp.addListener('backButton', () => {
-        const path = location.pathname;
-
-        // ✅ Define root pages (exit points)
-        const rootPaths = ['/', '/home'];
-
-        // 🔥 If on root → EXIT APP
-        if (rootPaths.includes(path)) {
-          CapacitorApp.exitApp();
-          return;
-        }
-
-        // 🔥 Otherwise → ALWAYS go back
+      if (rootPaths.includes(location.pathname)) {
+        CapacitorApp.exitApp();
+      } else {
         navigate(-1);
-      });
-    };
-
-    setup();
+      }
+    });
 
     return () => {
-      listener?.remove?.();
+      listenerPromise.then((l) => l.remove());
     };
   }, [location.pathname, navigate]);
+
+  return null;
+}
+
+/* =========================
+   PUSH NOTIFICATIONS (FCM WEB)
+========================= */
+function PushNotificationHandler() {
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // ======================
+        // GET FCM TOKEN
+        // ======================
+        const token = await getToken(messaging, {
+          vapidKey:
+            'BPrgjAcXQ2iHJnoWgrxja1e7aMyGQh4G9XgQmahe7kfMJ6RFPtJ2einBoJo8HfDTKX9wFK9-6yY2VqVzKQyST9c',
+        });
+
+        console.log('🔥 FCM Token:', token);
+
+        // 👉 Send token to your backend (Supabase recommended)
+        // await saveTokenToDB(token);
+
+        // ======================
+        // FOREGROUND MESSAGES
+        // ======================
+        onMessage(messaging, (payload) => {
+          console.log('📩 Notification received:', payload);
+
+          alert(
+            payload.notification?.title +
+              '\n' +
+              payload.notification?.body
+          );
+        });
+      } catch (err) {
+        console.error('FCM init error:', err);
+      }
+    };
+
+    init();
+  }, []);
 
   return null;
 }
@@ -157,6 +214,7 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        <PushNotificationHandler />
         <BackButtonHandler />
         <AppRoutes />
         <Toaster />
