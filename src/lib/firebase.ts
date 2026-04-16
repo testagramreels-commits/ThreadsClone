@@ -10,7 +10,7 @@ const firebaseConfig = {
   projectId: "threadsclone-43ca1",
   storageBucket: "threadsclone-43ca1.appspot.com",
   messagingSenderId: "31488412729",
-  appId: "1:31488412729:web:REPLACE_WITH_WEB_APP_ID"
+  appId: "1:31488412729:android:c0bace20152f9725b2d1e8"
 };
 
 /* =========================
