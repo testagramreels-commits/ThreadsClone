@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "31488412729",
+    "project_id": "threadsclone-43ca1",
+    "storage_bucket": "threadsclone-43ca1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:31488412729:android:c0bace20152f9725b2d1e8",
+        "android_client_info": {
+          "package_name": "com.testagramreels.threadsclone"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9vA9X-TPzpHB7yaemYUTZuEaoZ-AB4Qc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
