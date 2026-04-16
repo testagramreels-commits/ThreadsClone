@@ -1,14 +1,15 @@
-/**
- * Push Notification utilities
- * Handles Web Push API subscription and notification display
- */
+const VAPID_PUBLIC_KEY = ''; // reserved for future Web Push / Firebase Web
 
-const VAPID_PUBLIC_KEY = ''; // Will use browser's built-in notification without VAPID for now
-
+/* =========================
+   SUPPORT CHECKS
+========================= */
 export function isPushSupported(): boolean {
   return 'Notification' in window && 'serviceWorker' in navigator;
 }
 
+/* =========================
+   PERMISSIONS
+========================= */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!isPushSupported()) return 'denied';
   return await Notification.requestPermission();
@@ -19,14 +20,17 @@ export function getNotificationPermission(): NotificationPermission {
   return Notification.permission;
 }
 
-export function showLocalNotification(title: string, body: string, options?: NotificationOptions) {
+/* =========================
+   CORE NOTIFICATION ENGINE
+========================= */
+function createNotification(title: string, body: string, options?: NotificationOptions) {
   if (!isPushSupported() || Notification.permission !== 'granted') return;
 
   const notification = new Notification(title, {
     body,
-    icon: '/manifest.json',
+    icon: '/favicon.ico', // FIXED: manifest.json is NOT valid icon
     badge: '/favicon.ico',
-    tag: 'threads-notification',
+    tag: 'app-notification',
     renotify: true,
     ...options,
   });
@@ -36,41 +40,50 @@ export function showLocalNotification(title: string, body: string, options?: Not
     notification.close();
   };
 
-  // Auto close after 5 seconds
   setTimeout(() => notification.close(), 5000);
 }
 
-export function notifyLike(username: string, threadContent: string) {
-  showLocalNotification(
+/* =========================
+   NOTIFICATION TYPES
+========================= */
+export function notifyLike(username: string, content: string) {
+  createNotification(
     `❤️ ${username} liked your thread`,
-    threadContent.substring(0, 80) + (threadContent.length > 80 ? '…' : ''),
+    truncate(content)
   );
 }
 
 export function notifyFollow(username: string) {
-  showLocalNotification(
+  createNotification(
     `👤 ${username} started following you`,
-    'Tap to view their profile',
+    'Tap to view profile'
   );
 }
 
-export function notifyReply(username: string, replyContent: string) {
-  showLocalNotification(
+export function notifyReply(username: string, content: string) {
+  createNotification(
     `💬 ${username} replied to your thread`,
-    replyContent.substring(0, 80) + (replyContent.length > 80 ? '…' : ''),
+    truncate(content)
   );
 }
 
-export function notifyMention(username: string, threadContent: string) {
-  showLocalNotification(
+export function notifyMention(username: string, content: string) {
+  createNotification(
     `@ ${username} mentioned you`,
-    threadContent.substring(0, 80) + (threadContent.length > 80 ? '…' : ''),
+    truncate(content)
   );
 }
 
 export function notifyRepost(username: string) {
-  showLocalNotification(
+  createNotification(
     `🔁 ${username} reposted your thread`,
-    'Your thread is spreading!',
+    'Your content is spreading!'
   );
+}
+
+/* =========================
+   UTILITY
+========================= */
+function truncate(text: string, max = 80) {
+  return text.length > max ? text.slice(0, max) + '…' : text;
 }
