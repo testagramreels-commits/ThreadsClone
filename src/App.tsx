@@ -86,46 +86,45 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 /* =========================
-   BACK BUTTON HANDLER
+   BACK BUTTON HANDLER (FIXED)
 ========================= */
 function BackButtonHandler() {
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    let backListener: any;
+    let listener: any;
 
-    const initBack = async () => {
-      backListener = await CapacitorApp.addListener('backButton', () => {
+    const setup = async () => {
+      listener = await CapacitorApp.addListener('backButton', () => {
         const path = location.pathname;
 
-        // 🧠 Home → exit app
-        if (path === '/' || path === '/home') {
+        // ✅ Define root pages (exit points)
+        const rootPaths = ['/', '/home'];
+
+        // 🔥 If on root → EXIT APP
+        if (rootPaths.includes(path)) {
           CapacitorApp.exitApp();
           return;
         }
 
-        // 🧠 Safe back navigation
-        if (window.history.length > 1) {
-          navigate(-1);
-        } else {
-          CapacitorApp.exitApp();
-        }
+        // 🔥 Otherwise → ALWAYS go back
+        navigate(-1);
       });
     };
 
-    initBack();
+    setup();
 
     return () => {
-      backListener?.remove?.();
+      listener?.remove?.();
     };
-  }, [location, navigate]);
+  }, [location.pathname, navigate]);
 
   return null;
 }
 
 /* =========================
-   APP ROUTES (UNCHANGED)
+   APP ROUTES
 ========================= */
 function AppRoutes() {
   return (
