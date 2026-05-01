@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Users, FileText, Heart, MessageCircle, 
-  Share2, Video, TrendingUp, BarChart3, Plus, Edit, Trash2, HardDrive, CheckCircle, XCircle
+import {
+  ArrowLeft, Users, FileText, Heart, MessageCircle,
+  Share2, Video, TrendingUp, BarChart3, Plus, Edit, Trash2,
+  HardDrive, CheckCircle, XCircle, DollarSign, Eye, Clock,
+  Megaphone, RefreshCw, UserCheck, ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,11 +13,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/features/BottomNav';
 import { isAdmin, getPlatformAnalytics, getAllAds, createAd, updateAd, deleteAd } from '@/lib/api';
-import { AdPlacement } from '@/types/database';
+import { supabase } from '@/lib/supabase';
+import { AdPlacement, UserAd } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
 
 interface PlatformStats {
   totalUsers: number;
@@ -26,6 +29,8 @@ interface PlatformStats {
   videoThreads: number;
 }
 
+type AdminTab = 'overview' | 'ads' | 'user-ads' | 'storage';
+
 export function AdminDashboardPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -33,41 +38,31 @@ export function AdminDashboardPage() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [ads, setAds] = useState<AdPlacement[]>([]);
+  const [userAds, setUserAds] = useState<UserAd[]>([]);
   const [showAdDialog, setShowAdDialog] = useState(false);
   const [editingAd, setEditingAd] = useState<AdPlacement | null>(null);
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [backblazeStatus, setBackblazeStatus] = useState<'checking' | 'configured' | 'not-configured'>('checking');
   const [adForm, setAdForm] = useState({
     name: '',
     ad_code: '',
     position: 'feed' as 'feed' | 'sidebar' | 'profile' | 'video',
   });
-  const [backblazeStatus, setBackblazeStatus] = useState<'checking' | 'configured' | 'not-configured'>('checking');
 
-  useEffect(() => {
-    checkAccess();
-  }, []);
+  useEffect(() => { checkAccess(); }, []);
 
   const checkAccess = async () => {
     try {
       const adminStatus = await isAdmin();
       if (!adminStatus) {
-        toast({
-          title: 'Access Denied',
-          description: 'You do not have admin privileges',
-          variant: 'destructive',
-        });
+        toast({ title: 'Access Denied', variant: 'destructive' });
         navigate('/');
         return;
       }
       setHasAccess(true);
-      await loadStats();
-      await loadAds();
+      await Promise.all([loadStats(), loadAds(), loadUserAds()]);
       checkBackblazeStatus();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
       navigate('/');
     }
   };
@@ -77,510 +72,372 @@ export function AdminDashboardPage() {
       const { isBackblazeConfigured } = await import('@/lib/backblaze');
       const configured = await isBackblazeConfigured();
       setBackblazeStatus(configured ? 'configured' : 'not-configured');
-    } catch (error) {
-      console.error('Failed to check Backblaze status:', error);
-      setBackblazeStatus('not-configured');
-    }
+    } catch { setBackblazeStatus('not-configured'); }
   };
 
   const loadStats = async () => {
     try {
       const data = await getPlatformAnalytics();
       setStats(data);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const loadAds = async () => {
     try {
       const data = await getAllAds();
       setAds(data);
-    } catch (error: any) {
-      console.error('Failed to load ads:', error);
+    } catch (e) { console.error(e); }
+  };
+
+  const loadUserAds = async () => {
+    try {
+      const { data } = await supabase
+        .from('user_ads')
+        .select('*, user:user_id(id, username, email, avatar_url)')
+        .order('created_at', { ascending: false });
+      setUserAds((data || []) as UserAd[]);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleApproveUserAd = async (adId: string) => {
+    try {
+      await supabase.from('user_ads').update({
+        status: 'active',
+        starts_at: new Date().toISOString(),
+      }).eq('id', adId);
+      toast({ title: 'Ad approved and activated!' });
+      loadUserAds();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
   };
 
-  const handleCreateAd = () => {
-    setEditingAd(null);
-    setAdForm({
-      name: '',
-      ad_code: '',
-      position: 'feed',
-    });
-    setShowAdDialog(true);
-  };
-
-  const handleEditAd = (ad: AdPlacement) => {
-    setEditingAd(ad);
-    setAdForm({
-      name: ad.name,
-      ad_code: ad.ad_code,
-      position: ad.position,
-    });
-    setShowAdDialog(true);
+  const handleRejectUserAd = async (adId: string) => {
+    if (!confirm('Reject this ad?')) return;
+    try {
+      await supabase.from('user_ads').update({ status: 'rejected' }).eq('id', adId);
+      toast({ title: 'Ad rejected' });
+      loadUserAds();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
   };
 
   const handleSaveAd = async () => {
     try {
       if (editingAd) {
         await updateAd(editingAd.id, adForm);
-        toast({
-          title: 'Success',
-          description: 'Ad updated successfully',
-        });
+        toast({ title: 'Ad updated!' });
       } else {
         await createAd(adForm.name, adForm.ad_code, adForm.position);
-        toast({
-          title: 'Success',
-          description: 'Ad created successfully',
-        });
+        toast({ title: 'Ad created!' });
       }
       setShowAdDialog(false);
       loadAds();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
   };
 
-  const handleDeleteAd = async (adId: string) => {
-    if (!confirm('Are you sure you want to delete this ad?')) return;
-    
-    try {
-      await deleteAd(adId);
-      toast({
-        title: 'Success',
-        description: 'Ad deleted successfully',
-      });
-      loadAds();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleToggleAd = async (ad: AdPlacement) => {
-    try {
-      await updateAd(ad.id, { is_active: !ad.is_active });
-      toast({
-        title: 'Success',
-        description: ad.is_active ? 'Ad deactivated' : 'Ad activated',
-      });
-      loadAds();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
+  const TABS: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
+    { key: 'overview', label: 'Overview', icon: <BarChart3 className="h-4 w-4" /> },
+    { key: 'ads', label: 'Ad System', icon: <TrendingUp className="h-4 w-4" /> },
+    { key: 'user-ads', label: `User Ads ${userAds.filter(a => a.status === 'pending').length > 0 ? `(${userAds.filter(a => a.status === 'pending').length})` : ''}`, icon: <Megaphone className="h-4 w-4" /> },
+    { key: 'storage', label: 'Storage', icon: <HardDrive className="h-4 w-4" /> },
+  ];
 
   if (loading || !hasAccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+          <p className="text-sm text-muted-foreground">Loading admin panel...</p>
+        </div>
       </div>
     );
   }
 
+  const pendingUserAds = userAds.filter(a => a.status === 'pending');
+  const statCards = stats ? [
+    { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: <Users className="h-5 w-5 text-blue-500" />, color: 'text-blue-500' },
+    { label: 'Total Threads', value: stats.totalThreads.toLocaleString(), icon: <FileText className="h-5 w-5 text-green-500" />, color: 'text-green-500' },
+    { label: 'Total Likes', value: stats.totalLikes.toLocaleString(), icon: <Heart className="h-5 w-5 text-red-500" />, color: 'text-red-500' },
+    { label: 'Total Replies', value: stats.totalReplies.toLocaleString(), icon: <MessageCircle className="h-5 w-5 text-purple-500" />, color: 'text-purple-500' },
+    { label: 'Total Follows', value: stats.totalFollows.toLocaleString(), icon: <Share2 className="h-5 w-5 text-orange-500" />, color: 'text-orange-500' },
+    { label: 'Video Threads', value: stats.videoThreads.toLocaleString(), icon: <Video className="h-5 w-5 text-cyan-500" />, color: 'text-cyan-500' },
+  ] : [];
+
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
-      <main className="container max-w-6xl mx-auto pb-20 md:pb-4 p-4 overflow-x-hidden">
-        <div className="mb-6">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/')}
-            className="mb-4"
-          >
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/60">
+        <div className="max-w-4xl mx-auto flex items-center gap-3 px-4 h-14">
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => navigate('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex items-center gap-3">
-            <BarChart3 className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-              <p className="text-muted-foreground">Platform analytics and insights</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <h1 className="font-bold text-base">Admin Dashboard</h1>
           </div>
+          <Button variant="ghost" size="icon" className="ml-auto" onClick={() => { loadStats(); loadAds(); loadUserAds(); }}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalUsers.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">Registered accounts</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Threads</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalThreads.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">Posts created</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Video Threads</CardTitle>
-              <Video className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.videoThreads.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.totalThreads ? 
-                  `${Math.round((stats.videoThreads / stats.totalThreads) * 100)}% of all threads` 
-                  : '0% of all threads'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Likes</CardTitle>
-              <Heart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalLikes.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Avg {stats?.totalThreads ? (stats.totalLikes / stats.totalThreads).toFixed(1) : '0'} per thread
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Replies</CardTitle>
-              <MessageCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalReplies.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Avg {stats?.totalThreads ? (stats.totalReplies / stats.totalThreads).toFixed(1) : '0'} per thread
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Follows</CardTitle>
-              <Share2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalFollows.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Avg {stats?.totalUsers ? (stats.totalFollows / stats.totalUsers).toFixed(1) : '0'} per user
-              </p>
-            </CardContent>
-          </Card>
+        {/* Tab bar */}
+        <div className="max-w-4xl mx-auto flex overflow-x-auto scrollbar-hide px-2 pb-0">
+          {TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
+                activeTab === tab.key
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <Card className="mb-4">
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg md:text-xl">AdSense Management</CardTitle>
-                <CardDescription className="text-sm">Manage your Google AdSense ad placements</CardDescription>
-              </div>
-              <Button onClick={handleCreateAd} className="w-full md:w-auto">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Ad
-              </Button>
+      <main className="max-w-4xl mx-auto pb-28 p-4">
+        {/* OVERVIEW */}
+        {activeTab === 'overview' && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+              {statCards.map((card, i) => (
+                <Card key={i}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      {card.icon}
+                      <span className={`text-2xl font-bold ${card.color}`}>{card.value}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{card.label}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </CardHeader>
-          <CardContent>
-            {ads.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No ads configured yet. Click "Add Ad" to create your first ad placement.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {ads.map((ad) => (
-                  <div key={ad.id} className="border rounded-lg p-4 hover:border-primary transition-colors">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-base">{ad.name}</h3>
-                            <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
-                              ad.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
-                            }`}>
-                              {ad.is_active ? '● Active' : '○ Inactive'}
-                            </span>
-                            <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 capitalize whitespace-nowrap">
-                              {ad.position}
-                            </span>
-                          </div>
-                          <div className="bg-muted/50 rounded p-2 mt-2 overflow-hidden">
-                            <p className="text-xs text-muted-foreground font-mono break-all line-clamp-2">
-                              {ad.ad_code.substring(0, 150)}...
-                            </p>
-                          </div>
+
+            {pendingUserAds.length > 0 && (
+              <Card className="border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                    <Clock className="h-4 w-4" />
+                    {pendingUserAds.length} Ad{pendingUserAds.length > 1 ? 's' : ''} Awaiting Review
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button size="sm" variant="outline" onClick={() => setActiveTab('user-ads')}>
+                    Review Now
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* ADS SYSTEM */}
+        {activeTab === 'ads' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Ad Placements</CardTitle>
+                  <CardDescription>Manage Google AdSense & custom ads</CardDescription>
+                </div>
+                <Button onClick={() => { setEditingAd(null); setAdForm({ name: '', ad_code: '', position: 'feed' }); setShowAdDialog(true); }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Ad
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {ads.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <TrendingUp className="h-10 w-10 mx-auto mb-2" />
+                  <p className="text-sm">No ads configured yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {ads.map(ad => (
+                    <div key={ad.id} className="border border-border/60 rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-sm">{ad.name}</h3>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${ad.is_active ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
+                            {ad.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 capitalize">{ad.position}</span>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateAd(ad.id, { is_active: !ad.is_active }).then(() => { toast({ title: ad.is_active ? 'Deactivated' : 'Activated' }); loadAds(); })}>
+                            {ad.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingAd(ad); setAdForm({ name: ad.name, ad_code: ad.ad_code, position: ad.position }); setShowAdDialog(true); }}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteAd(ad.id).then(() => { toast({ title: 'Deleted' }); loadAds(); })}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleToggleAd(ad)}
-                          className="flex-1 md:flex-none"
-                        >
-                          {ad.is_active ? 'Deactivate' : 'Activate'}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditAd(ad)}
-                          className="flex-1 md:flex-none"
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteAd(ad.id)}
-                          className="flex-1 md:flex-none"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </Button>
+                      <p className="text-xs font-mono text-muted-foreground truncate bg-muted/50 px-2 py-1 rounded">
+                        {ad.ad_code.substring(0, 100)}...
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* USER ADS */}
+        {activeTab === 'user-ads' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold">User Promoted Ads</h2>
+              <span className="text-xs text-muted-foreground">{userAds.length} total</span>
+            </div>
+
+            {userAds.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground">
+                <Megaphone className="h-12 w-12 mx-auto mb-3" />
+                <p className="font-medium">No user ads yet</p>
+                <p className="text-sm mt-1">When users create ads, they'll appear here for review</p>
+              </div>
+            ) : (
+              userAds.map(ad => (
+                <Card key={ad.id} className={ad.status === 'pending' ? 'border-amber-200 dark:border-amber-800' : ''}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-sm">{ad.title}</h3>
+                          <span className={`text-xs px-2 py-0.5 rounded-full capitalize font-medium ${
+                            ad.status === 'active' ? 'bg-green-100 text-green-700' :
+                            ad.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                            ad.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            'bg-muted text-muted-foreground'
+                          }`}>
+                            {ad.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">{ad.description}</p>
+                        {ad.image_url && (
+                          <img src={ad.image_url} alt={ad.title} className="h-20 w-full object-cover rounded-lg mb-2" />
+                        )}
+                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />${ad.budget_usd} · {ad.duration_days}d</span>
+                          <span className="flex items-center gap-1"><Eye className="h-3 w-3" />{ad.impressions} impressions</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatDistanceToNow(new Date(ad.created_at), { addSuffix: true })}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))})
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle className="text-lg md:text-xl flex items-center gap-2">
-              <HardDrive className="h-5 w-5" />
-              Backblaze Storage Status
-            </CardTitle>
-            <CardDescription className="text-sm">Unlimited cloud storage for your videos and media</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="flex items-center gap-3">
-                {backblazeStatus === 'checking' && (
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                )}
-                {backblazeStatus === 'configured' && (
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                )}
-                {backblazeStatus === 'not-configured' && (
-                  <XCircle className="h-6 w-6 text-red-600" />
-                )}
+                    {ad.status === 'pending' && (
+                      <div className="flex gap-2 pt-2 border-t border-border/60">
+                        <Button
+                          size="sm"
+                          className="flex-1 gap-1.5"
+                          onClick={() => handleApproveUserAd(ad.id)}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          Approve & Activate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-1.5 text-destructive"
+                          onClick={() => handleRejectUserAd(ad.id)}
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* STORAGE */}
+        {activeTab === 'storage' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <HardDrive className="h-5 w-5" />
+                Storage Status
+              </CardTitle>
+              <CardDescription>Backblaze B2 cloud storage for videos and media</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4 p-4 border border-border/60 rounded-xl">
+                {backblazeStatus === 'checking' && <div className="animate-spin h-8 w-8 rounded-full border-b-2 border-primary" />}
+                {backblazeStatus === 'configured' && <CheckCircle className="h-8 w-8 text-green-600" />}
+                {backblazeStatus === 'not-configured' && <XCircle className="h-8 w-8 text-red-500" />}
                 <div>
                   <p className="font-semibold">
-                    {backblazeStatus === 'checking' && 'Checking status...'}
-                    {backblazeStatus === 'configured' && 'Backblaze Connected ✓'}
+                    {backblazeStatus === 'checking' && 'Checking...'}
+                    {backblazeStatus === 'configured' && 'Backblaze B2 Connected ✓'}
                     {backblazeStatus === 'not-configured' && 'Not Connected'}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {backblazeStatus === 'configured' && 'Videos are automatically uploaded to Backblaze B2 storage'}
-                    {backblazeStatus === 'not-configured' && 'Videos are stored in Supabase (limited capacity)'}
+                    {backblazeStatus === 'configured' && 'Unlimited video storage active'}
+                    {backblazeStatus === 'not-configured' && 'Using Supabase storage (limited)'}
                   </p>
                 </div>
               </div>
               {backblazeStatus === 'configured' && (
-                <div className="text-right">
-                  <p className="text-sm font-medium text-green-600">Active</p>
-                  <p className="text-xs text-muted-foreground">Unlimited storage</p>
+                <div className="bg-green-50 dark:bg-green-950/20 p-3 rounded-xl text-sm text-green-800 dark:text-green-200">
+                  ✓ All video uploads use Backblaze B2 with CDN delivery for fast loading
                 </div>
               )}
-            </div>
-            {backblazeStatus === 'configured' && (
-              <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  ✓ All video uploads are automatically stored in Backblaze B2 with unlimited capacity and faster CDN delivery.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg md:text-xl">🚀 Quick Start Guide: AdSense Integration</CardTitle>
-            <CardDescription className="text-sm">Follow these steps to monetize your platform with Google AdSense</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {/* Step-by-step guide with better visual hierarchy */}
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">1</div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold mb-1">Sign up for AdSense</h4>
-                    <p className="text-sm text-muted-foreground">Visit <a href="https://www.google.com/adsense" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">google.com/adsense</a> and create an account</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">2</div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold mb-1">Get Approved</h4>
-                    <p className="text-sm text-muted-foreground">Submit your site for review and wait for approval (usually 1-2 weeks)</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">3</div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold mb-1">Create Ad Units</h4>
-                    <p className="text-sm text-muted-foreground">In your AdSense dashboard, create new ad units (Display Ads or In-feed Ads work best)</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">4</div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold mb-1">Copy Ad Code</h4>
-                    <p className="text-sm text-muted-foreground">Copy the entire ad code snippet from AdSense (starts with &lt;script&gt; or &lt;ins&gt;)</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold text-sm">5</div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold mb-1">Add to Your Platform</h4>
-                    <p className="text-sm text-muted-foreground">Click "Add Ad" button above, paste your code, select position, and activate!</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ad positions guide with icons */}
-              <div className="p-4 bg-gradient-to-br from-primary/5 to-purple-500/5 rounded-lg border">
-                <p className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Recommended Ad Positions:
-                </p>
-                <div className="grid md:grid-cols-2 gap-3">
-                  <div className="flex gap-2 text-sm">
-                    <div className="flex-shrink-0 text-primary">●</div>
-                    <div>
-                      <strong className="font-medium">Feed:</strong>
-                      <p className="text-muted-foreground">Between threads (every 7 posts) - Highest visibility</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 text-sm">
-                    <div className="flex-shrink-0 text-primary">●</div>
-                    <div>
-                      <strong className="font-medium">Profile:</strong>
-                      <p className="text-muted-foreground">Below profile info - High engagement</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 text-sm">
-                    <div className="flex-shrink-0 text-primary">●</div>
-                    <div>
-                      <strong className="font-medium">Video:</strong>
-                      <p className="text-muted-foreground">Video pages - Premium placement</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 text-sm">
-                    <div className="flex-shrink-0 text-primary">●</div>
-                    <div>
-                      <strong className="font-medium">Sidebar:</strong>
-                      <p className="text-muted-foreground">Desktop only - Persistent visibility</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tips section */}
-              <div className="p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm font-semibold mb-2">💡 Pro Tips:</p>
-                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                  <li>Start with 1-2 ad placements and test performance</li>
-                  <li>Use responsive ad units for best mobile experience</li>
-                  <li>Check AdSense dashboard regularly for earnings and insights</li>
-                  <li>Follow AdSense policies to avoid account suspension</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </main>
 
+      {/* Ad Dialog */}
       <Dialog open={showAdDialog} onOpenChange={setShowAdDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingAd ? 'Edit Ad' : 'Add New Ad'}</DialogTitle>
-            <DialogDescription>
-              Paste your Google AdSense code below
-            </DialogDescription>
+            <DialogDescription>Configure your Google AdSense or custom ad placement</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">Ad Name</Label>
-              <Input
-                id="name"
-                value={adForm.name}
-                onChange={(e) => setAdForm({ ...adForm, name: e.target.value })}
-                placeholder="e.g., Homepage Banner"
-              />
+              <Label>Ad Name</Label>
+              <Input value={adForm.name} onChange={e => setAdForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g., Feed Banner" />
             </div>
             <div>
-              <Label htmlFor="position">Position</Label>
-              <Select
-                value={adForm.position}
-                onValueChange={(value: 'feed' | 'sidebar' | 'profile' | 'video') =>
-                  setAdForm({ ...adForm, position: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Label>Position</Label>
+              <Select value={adForm.position} onValueChange={(v: any) => setAdForm(f => ({ ...f, position: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="feed">Feed (between posts)</SelectItem>
-                  <SelectItem value="profile">Profile (user pages)</SelectItem>
-                  <SelectItem value="video">Video (video pages)</SelectItem>
-                  <SelectItem value="sidebar">Sidebar (desktop only)</SelectItem>
+                  <SelectItem value="profile">Profile pages</SelectItem>
+                  <SelectItem value="video">Video pages</SelectItem>
+                  <SelectItem value="sidebar">Sidebar (desktop)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="ad_code">AdSense Code</Label>
+              <Label>Ad Code</Label>
               <Textarea
-                id="ad_code"
                 value={adForm.ad_code}
-                onChange={(e) => setAdForm({ ...adForm, ad_code: e.target.value })}
+                onChange={e => setAdForm(f => ({ ...f, ad_code: e.target.value }))}
                 placeholder="Paste your AdSense code here..."
-                className="font-mono text-xs min-h-[200px]"
+                className="font-mono text-xs min-h-[150px]"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdDialog(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setShowAdDialog(false)}>Cancel</Button>
             <Button onClick={handleSaveAd} disabled={!adForm.name || !adForm.ad_code}>
               {editingAd ? 'Update' : 'Create'}
             </Button>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore, mapSupabaseUser } from '@/stores/authStore';
 
@@ -52,5 +52,5 @@ export function useAuth() {
     };
   }, [login, logout, setLoading]);
 
-  return { user, loading, logout };
+  return { user, loading, logout, login };
 }

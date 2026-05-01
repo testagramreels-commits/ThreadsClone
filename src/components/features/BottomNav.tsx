@@ -1,10 +1,10 @@
-import { Home, Search, PenSquare, Bell, User, Video } from 'lucide-react';
+import { Home, Search, PenSquare, Bell, User, Video, BarChart3 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useState, useEffect } from 'react';
 import { getUnreadNotificationsCount } from '@/lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CreateThread } from './CreateThread';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export function BottomNav() {
   const navigate = useNavigate();
@@ -50,12 +50,6 @@ export function BottomNav() {
       action: () => setShowCreate(true),
     },
     {
-      icon: Video,
-      label: 'Videos',
-      path: '/videos',
-      action: () => navigate('/videos'),
-    },
-    {
       icon: Bell,
       label: 'Activity',
       path: '/activity',
@@ -72,35 +66,40 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/60 safe-area-inset-bottom">
-        <div className="flex items-center justify-around h-14 px-1 max-w-2xl mx-auto">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/60">
+        <div className="flex items-center justify-around max-w-2xl mx-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           {navItems.map(({ icon: Icon, label, path, action, badge }) => {
             const active = path !== '__create__' && isActive(path);
+            const isCreate = path === '__create__';
             return (
               <button
                 key={label}
                 onClick={action}
-                className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] px-2 rounded-xl transition-all relative ${
-                  path === '__create__'
-                    ? 'bg-foreground text-background rounded-full w-10 h-10 flex-shrink-0 shadow-lg'
+                style={{ minHeight: 56, minWidth: 56 }}
+                className={`flex flex-col items-center justify-center gap-0.5 px-2 rounded-xl transition-all relative ${
+                  isCreate
+                    ? 'bg-foreground rounded-full mx-2 h-10 w-10 shadow-lg flex-shrink-0'
                     : active
                     ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-foreground active:scale-90'
                 }`}
               >
-                {path === '__create__' ? (
-                  <Icon className="h-5 w-5" />
+                {isCreate ? (
+                  <Icon className="h-5 w-5 text-background" />
                 ) : (
                   <>
                     <div className="relative">
-                      <Icon className={`h-5 w-5 transition-transform ${active ? 'scale-110' : ''}`} />
+                      <Icon className={`h-5 w-5 transition-all duration-200 ${active ? 'scale-110 stroke-[2.5]' : ''}`} />
                       {badge && badge > 0 ? (
                         <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
                           {badge > 99 ? '99+' : badge}
                         </span>
                       ) : null}
+                      {active && (
+                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-foreground" />
+                      )}
                     </div>
-                    <span className={`text-[10px] font-medium ${active ? 'text-foreground' : ''}`}>
+                    <span className={`text-[9px] font-medium transition-colors ${active ? 'text-foreground' : ''}`}>
                       {label}
                     </span>
                   </>
@@ -113,10 +112,12 @@ export function BottomNav() {
 
       {/* Quick Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden rounded-2xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Create Thread</DialogTitle>
+          </DialogHeader>
           <CreateThread
             onThreadCreated={() => setShowCreate(false)}
-            compact
           />
         </DialogContent>
       </Dialog>

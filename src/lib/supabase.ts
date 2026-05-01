@@ -11,5 +11,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-  }
+    detectSessionInUrl: false,
+    storageKey: 'threadsclone-auth',
+  },
+  global: {
+    headers: {
+      'x-client-info': 'threadsclone-web/2.0',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 });

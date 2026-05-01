@@ -22,29 +22,12 @@ import { MessagesPage } from '@/pages/MessagesPage';
 import { MessageConversationPage } from '@/pages/MessageConversationPage';
 import { BookmarksPage } from '@/pages/BookmarksPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { CreatorAnalyticsPage } from '@/pages/CreatorAnalyticsPage';
+import { CreateAdPage } from '@/pages/CreateAdPage';
 
 import { Toaster } from '@/components/ui/toaster';
 
-import React, { Component, ReactNode, useEffect } from 'react';
-import { App as CapacitorApp } from '@capacitor/app';
-
-/* =========================
-   FIREBASE (FCM WEB PUSH)
-========================= */
-import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-
-const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT.appspot.com',
-  messagingSenderId: '31488412729',
-  appId: 'YOUR_APP_ID',
-};
-
-const firebaseApp = initializeApp(firebaseConfig);
-const messaging = getMessaging(firebaseApp);
+import React, { Component, ReactNode, useEffect, Suspense, lazy } from 'react';
 
 /* =========================
    ERROR BOUNDARY
@@ -71,15 +54,14 @@ class ErrorBoundary extends Component<
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
           <div className="max-w-md w-full space-y-4 text-center">
-            <h1 className="text-2xl font-bold text-destructive">
-              Something went wrong
-            </h1>
-            <p className="text-muted-foreground">
-              {this.state.error?.message}
-            </p>
+            <div className="h-16 w-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h1 className="text-2xl font-bold">Something went wrong</h1>
+            <p className="text-muted-foreground text-sm">{this.state.error?.message}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-full font-semibold text-sm"
             >
               Reload App
             </button>
@@ -87,9 +69,43 @@ class ErrorBoundary extends Component<
         </div>
       );
     }
-
     return this.props.children;
   }
+}
+
+/* =========================
+   THEME INIT (runs once)
+========================= */
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark') document.documentElement.classList.add('dark');
+else if (savedTheme === 'light') document.documentElement.classList.remove('dark');
+else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark');
+}
+
+/* =========================
+   LOADING SCREEN
+========================= */
+function SplashScreen() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
+      <div className="relative">
+        <div className="h-16 w-16 bg-gradient-to-br from-primary to-purple-600 rounded-2xl flex items-center justify-center shadow-2xl">
+          <span className="text-2xl font-black text-white">T</span>
+        </div>
+        <div className="absolute -bottom-1 -right-1 h-5 w-5 bg-green-500 rounded-full border-2 border-background animate-pulse" />
+      </div>
+      <div className="flex gap-1 mt-2">
+        {[0, 1, 2].map(i => (
+          <div
+            key={i}
+            className="h-2 w-2 rounded-full bg-primary animate-bounce"
+            style={{ animationDelay: `${i * 0.15}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* =========================
@@ -98,86 +114,9 @@ class ErrorBoundary extends Component<
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
+  if (loading) return <SplashScreen />;
   if (!user) return <Navigate to="/login" replace />;
-
   return <>{children}</>;
-}
-
-/* =========================
-   BACK BUTTON HANDLER
-========================= */
-function BackButtonHandler() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    const listenerPromise = CapacitorApp.addListener('backButton', () => {
-      const rootPaths = ['/', '/home'];
-
-      if (rootPaths.includes(location.pathname)) {
-        CapacitorApp.exitApp();
-      } else {
-        navigate(-1);
-      }
-    });
-
-    return () => {
-      listenerPromise.then((l) => l.remove());
-    };
-  }, [location.pathname, navigate]);
-
-  return null;
-}
-
-/* =========================
-   PUSH NOTIFICATIONS (FCM WEB)
-========================= */
-function PushNotificationHandler() {
-  useEffect(() => {
-    const init = async () => {
-      try {
-        // ======================
-        // GET FCM TOKEN
-        // ======================
-        const token = await getToken(messaging, {
-          vapidKey:
-            'BPrgjAcXQ2iHJnoWgrxja1e7aMyGQh4G9XgQmahe7kfMJ6RFPtJ2einBoJo8HfDTKX9wFK9-6yY2VqVzKQyST9c',
-        });
-
-        console.log('🔥 FCM Token:', token);
-
-        // 👉 Send token to your backend (Supabase recommended)
-        // await saveTokenToDB(token);
-
-        // ======================
-        // FOREGROUND MESSAGES
-        // ======================
-        onMessage(messaging, (payload) => {
-          console.log('📩 Notification received:', payload);
-
-          alert(
-            payload.notification?.title +
-              '\n' +
-              payload.notification?.body
-          );
-        });
-      } catch (err) {
-        console.error('FCM init error:', err);
-      }
-    };
-
-    init();
-  }, []);
-
-  return null;
 }
 
 /* =========================
@@ -201,6 +140,8 @@ function AppRoutes() {
       <Route path="/messages/:conversationId" element={<ProtectedRoute><MessageConversationPage /></ProtectedRoute>} />
       <Route path="/bookmarks" element={<ProtectedRoute><BookmarksPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="/analytics" element={<ProtectedRoute><CreatorAnalyticsPage /></ProtectedRoute>} />
+      <Route path="/create-ad" element={<ProtectedRoute><CreateAdPage /></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -214,8 +155,6 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <PushNotificationHandler />
-        <BackButtonHandler />
         <AppRoutes />
         <Toaster />
       </BrowserRouter>

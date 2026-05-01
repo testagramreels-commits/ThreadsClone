@@ -120,10 +120,11 @@ export async function getThreadsOptimized(
 
 export async function getMixedFeed(limit: number = 20, offset: number = 0): Promise<Thread[]> {
   try {
-    return await getThreadsOptimized(limit, offset, undefined, false);
+    const data = await getThreadsOptimized(limit, offset, undefined, false);
+    return data;
   } catch (error) {
     console.error('Error in getMixedFeed:', error);
-    return await getThreads();
+    try { return await getThreads(); } catch { return []; }
   }
 }
 

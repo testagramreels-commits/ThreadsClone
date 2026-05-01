@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { User } from '@supabase/supabase-js';
 
 interface AuthUser {
@@ -16,13 +17,21 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  loading: true,
-  login: (user) => set({ user, loading: false }),
-  logout: () => set({ user: null, loading: false }),
-  setLoading: (loading) => set({ loading }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      loading: true,
+      login: (user) => set({ user, loading: false }),
+      logout: () => set({ user: null, loading: false }),
+      setLoading: (loading) => set({ loading }),
+    }),
+    {
+      name: 'threadsclone-user',
+      partialize: (state) => ({ user: state.user }), // Only persist user, not loading
+    }
+  )
+);
 
 export function mapSupabaseUser(user: User): AuthUser {
   return {
