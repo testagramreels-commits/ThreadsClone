@@ -38,7 +38,8 @@ export function ProfilePage() {
   const [followLoading, setFollowLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('threads');
 
-  const isOwnProfile = currentUser?.username === username;
+  // Own profile: username param matches current user OR navigated to /profile/:id that matches current user id
+  const isOwnProfile = currentUser?.username === username || currentUser?.id === username;
 
   useEffect(() => {
     if (!username) {
@@ -46,20 +47,37 @@ export function ProfilePage() {
       else navigate('/login', { replace: true });
       return;
     }
+    // If user navigated to their own profile but username isn't set yet, try by id
     loadProfile();
-  }, [username]);
+  }, [username, currentUser?.username]);
 
   const loadProfile = async () => {
     if (!username) return;
     setLoading(true);
     try {
-      const profileData = await getUserProfile(username);
+      let profileData;
+      try {
+        // First try by username
+        profileData = await getUserProfile(username);
+      } catch {
+        // If that fails and it's the current user (username might not be set or it's an id),
+        // try loading by current user's username
+        if (currentUser?.username && currentUser.username !== username) {
+          profileData = await getUserProfile(currentUser.username);
+          // redirect to correct URL
+          navigate(`/profile/${currentUser.username}`, { replace: true });
+        } else if (currentUser?.username) {
+          profileData = await getUserProfile(currentUser.username);
+        } else {
+          throw new Error('Profile not found');
+        }
+      }
       setProfile(profileData);
       const t = await getUserThreads(profileData.id);
       setThreads(t);
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message || 'Failed to load profile', variant: 'destructive' });
-      setTimeout(() => navigate('/'), 2000);
+      toast({ title: 'Profile not found', description: 'This user does not exist', variant: 'destructive' });
+      setTimeout(() => navigate('/'), 1500);
     } finally {
       setLoading(false);
     }

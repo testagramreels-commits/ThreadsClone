@@ -337,7 +337,7 @@ export function VideoFeedPage() {
         variant="ghost"
         size="icon"
         onClick={() => navigate('/')}
-        className="absolute top-4 left-4 z-50 text-white bg-black/30 hover:bg-black/50 rounded-full h-9 w-9"
+        className="absolute top-4 left-4 z-50 text-white bg-black/40 hover:bg-black/60 rounded-full h-10 w-10 backdrop-blur-sm"
       >
         <ArrowLeft className="h-5 w-5" />
       </Button>

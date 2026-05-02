@@ -26,6 +26,7 @@ import { CreatorAnalyticsPage } from '@/pages/CreatorAnalyticsPage';
 import { CreateAdPage } from '@/pages/CreateAdPage';
 
 import { Toaster } from '@/components/ui/toaster';
+import { LiveChatWidget } from '@/components/features/LiveChatWidget';
 
 import React, { Component, ReactNode, useEffect, Suspense, lazy } from 'react';
 
@@ -157,6 +158,7 @@ function App() {
       <BrowserRouter>
         <AppRoutes />
         <Toaster />
+        <LiveChatWidget />
       </BrowserRouter>
     </ErrorBoundary>
   );

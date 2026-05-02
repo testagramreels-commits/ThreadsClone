@@ -1,4 +1,4 @@
-import { Home, Search, PenSquare, Bell, User, Video, BarChart3 } from 'lucide-react';
+import { Home, Search, PenSquare, Bell, User, Video } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useState, useEffect } from 'react';
@@ -27,7 +27,11 @@ export function BottomNav() {
     return () => clearInterval(interval);
   }, [user]);
 
-  const navItems = [
+  // Hide on video page for true immersive TikTok experience
+  if (location.pathname === '/videos') return null;
+
+  // Items: Home | Search | [Create Center] | Videos | Activity | Profile
+  const leftItems = [
     {
       icon: Home,
       label: 'Home',
@@ -43,11 +47,15 @@ export function BottomNav() {
       path: '/search',
       action: () => navigate('/search'),
     },
+  ];
+
+  const rightItems = [
     {
-      icon: PenSquare,
-      label: 'Post',
-      path: '__create__',
-      action: () => setShowCreate(true),
+      icon: Video,
+      label: 'Videos',
+      path: '/videos',
+      action: () => navigate('/videos'),
+      badge: 0,
     },
     {
       icon: Bell,
@@ -61,52 +69,85 @@ export function BottomNav() {
       label: 'Profile',
       path: user?.username ? `/profile/${user.username}` : '/login',
       action: () => navigate(user?.username ? `/profile/${user.username}` : '/login'),
+      badge: 0,
     },
   ];
 
+  const NavButton = ({
+    icon: Icon,
+    label,
+    path,
+    action,
+    badge = 0,
+  }: {
+    icon: React.ElementType;
+    label: string;
+    path: string;
+    action: () => void;
+    badge?: number;
+  }) => {
+    const active = isActive(path);
+    return (
+      <button
+        onClick={action}
+        className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-all active:scale-90 relative ${
+          active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <div className="relative">
+          <Icon
+            className={`h-[22px] w-[22px] transition-all duration-200 ${
+              active ? 'scale-110' : ''
+            }`}
+            strokeWidth={active ? 2.5 : 1.8}
+          />
+          {badge > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
+        </div>
+        <span
+          className={`text-[10px] font-medium transition-colors leading-none ${
+            active ? 'text-foreground' : ''
+          }`}
+        >
+          {label}
+        </span>
+        {active && (
+          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-foreground rounded-t-full" />
+        )}
+      </button>
+    );
+  };
+
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border/60">
-        <div className="flex items-center justify-around max-w-2xl mx-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          {navItems.map(({ icon: Icon, label, path, action, badge }) => {
-            const active = path !== '__create__' && isActive(path);
-            const isCreate = path === '__create__';
-            return (
-              <button
-                key={label}
-                onClick={action}
-                style={{ minHeight: 56, minWidth: 56 }}
-                className={`flex flex-col items-center justify-center gap-0.5 px-2 rounded-xl transition-all relative ${
-                  isCreate
-                    ? 'bg-foreground rounded-full mx-2 h-10 w-10 shadow-lg flex-shrink-0'
-                    : active
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground active:scale-90'
-                }`}
-              >
-                {isCreate ? (
-                  <Icon className="h-5 w-5 text-background" />
-                ) : (
-                  <>
-                    <div className="relative">
-                      <Icon className={`h-5 w-5 transition-all duration-200 ${active ? 'scale-110 stroke-[2.5]' : ''}`} />
-                      {badge && badge > 0 ? (
-                        <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
-                          {badge > 99 ? '99+' : badge}
-                        </span>
-                      ) : null}
-                      {active && (
-                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-foreground" />
-                      )}
-                    </div>
-                    <span className={`text-[9px] font-medium transition-colors ${active ? 'text-foreground' : ''}`}>
-                      {label}
-                    </span>
-                  </>
-                )}
-              </button>
-            );
-          })}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 bg-background/96 backdrop-blur-xl border-t border-border/50"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', height: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
+      >
+        <div className="flex items-center h-14 max-w-2xl mx-auto px-1">
+          {/* Left items */}
+          {leftItems.map(item => (
+            <NavButton key={item.label} {...item} />
+          ))}
+
+          {/* Center Create Button */}
+          <div className="flex flex-col items-center justify-center flex-shrink-0 px-3">
+            <button
+              onClick={() => setShowCreate(true)}
+              className="h-[46px] w-[46px] bg-foreground rounded-[14px] flex items-center justify-center shadow-lg transition-all active:scale-90 hover:opacity-85"
+              aria-label="Create thread"
+            >
+              <PenSquare className="h-5 w-5 text-background" strokeWidth={2} />
+            </button>
+          </div>
+
+          {/* Right items */}
+          {rightItems.map(item => (
+            <NavButton key={item.label} {...item} />
+          ))}
         </div>
       </nav>
 
@@ -116,9 +157,7 @@ export function BottomNav() {
           <DialogHeader className="sr-only">
             <DialogTitle>Create Thread</DialogTitle>
           </DialogHeader>
-          <CreateThread
-            onThreadCreated={() => setShowCreate(false)}
-          />
+          <CreateThread onThreadCreated={() => setShowCreate(false)} />
         </DialogContent>
       </Dialog>
     </>

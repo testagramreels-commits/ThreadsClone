@@ -175,7 +175,7 @@ export function HomePage() {
   const SUGGESTION_POSITIONS = [5, 15, 30];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-0">
       <Header />
 
       {/* Pull-to-refresh indicator */}
