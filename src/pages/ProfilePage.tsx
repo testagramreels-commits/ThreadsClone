@@ -1,16 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Link as LinkIcon, MapPin, Calendar, Settings,
   Eye, MessageCircle, MoreHorizontal, Share2, Grid3x3,
   Heart, Repeat2, Loader2, UserCheck, UserPlus, BarChart3,
-  BadgeCheck, Megaphone
+  BadgeCheck, Megaphone, DollarSign, Gift
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThreadCard } from '@/components/features/ThreadCard';
 import { BottomNav } from '@/components/features/BottomNav';
 import { AdSlot } from '@/components/features/AdSlot';
+import { TipModal } from '@/components/features/TipModal';
 import {
   getUserProfile, getUserThreads, toggleFollow,
   getOrCreateConversation, getUserLikedThreads
@@ -19,6 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { UserWithStats, Thread } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { supabase } from '@/lib/supabase';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
@@ -37,9 +39,12 @@ export function ProfilePage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('threads');
+  const [showTip, setShowTip] = useState(false);
+  const [isMonetized, setIsMonetized] = useState(false);
 
-  // Own profile: username param matches current user OR navigated to /profile/:id that matches current user id
-  const isOwnProfile = currentUser?.username === username || currentUser?.id === username;
+  const isOwnProfile =
+    currentUser?.username === username ||
+    currentUser?.id === username;
 
   useEffect(() => {
     if (!username) {
@@ -47,35 +52,72 @@ export function ProfilePage() {
       else navigate('/login', { replace: true });
       return;
     }
-    // If user navigated to their own profile but username isn't set yet, try by id
     loadProfile();
-  }, [username, currentUser?.username]);
+  }, [username]);
 
   const loadProfile = async () => {
     if (!username) return;
     setLoading(true);
     try {
-      let profileData;
-      try {
-        // First try by username
+      let profileData: UserWithStats | null = null;
+
+      // 1. Try lookup by username
+      const { data: byUsername } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('username', username)
+        .maybeSingle();
+
+      if (byUsername) {
         profileData = await getUserProfile(username);
-      } catch {
-        // If that fails and it's the current user (username might not be set or it's an id),
-        // try loading by current user's username
-        if (currentUser?.username && currentUser.username !== username) {
-          profileData = await getUserProfile(currentUser.username);
-          // redirect to correct URL
-          navigate(`/profile/${currentUser.username}`, { replace: true });
-        } else if (currentUser?.username) {
-          profileData = await getUserProfile(currentUser.username);
-        } else {
-          throw new Error('Profile not found');
+      } else if (currentUser) {
+        // 2. Maybe the param is actually the user's own ID or the username isn't set yet
+        if (username === currentUser.id || username === currentUser.username) {
+          // Load by current user's actual username if available
+          if (currentUser.username) {
+            profileData = await getUserProfile(currentUser.username);
+            navigate(`/profile/${currentUser.username}`, { replace: true });
+          } else {
+            // User has no username yet — load their profile by ID
+            const { data: byId } = await supabase
+              .from('user_profiles')
+              .select('*')
+              .eq('id', currentUser.id)
+              .maybeSingle();
+            if (byId) {
+              // Use id as username fallback for profile loading
+              profileData = {
+                ...byId,
+                followers_count: 0,
+                following_count: 0,
+                threads_count: 0,
+                is_following: false,
+              } as UserWithStats;
+            }
+          }
         }
       }
+
+      if (!profileData) {
+        toast({ title: 'Profile not found', description: 'This user does not exist', variant: 'destructive' });
+        setTimeout(() => navigate('/'), 1500);
+        return;
+      }
+
       setProfile(profileData);
+
+      // Check if creator is monetized
+      const { data: creatorSettings } = await supabase
+        .from('creator_settings')
+        .select('is_monetized, tip_enabled')
+        .eq('user_id', profileData.id)
+        .maybeSingle();
+      setIsMonetized(creatorSettings?.is_monetized && creatorSettings?.tip_enabled);
+
       const t = await getUserThreads(profileData.id);
       setThreads(t);
     } catch (error: any) {
+      console.error('Profile load error:', error);
       toast({ title: 'Profile not found', description: 'This user does not exist', variant: 'destructive' });
       setTimeout(() => navigate('/'), 1500);
     } finally {
@@ -87,14 +129,10 @@ export function ProfilePage() {
     setLoadingMore(true);
     try {
       if (tab === 'threads') {
-        const t = await getUserThreads(profileId);
-        setThreads(t);
+        setThreads(await getUserThreads(profileId));
       } else if (tab === 'likes') {
-        const t = await getUserLikedThreads(profileId);
-        setThreads(t);
+        setThreads(await getUserLikedThreads(profileId));
       } else if (tab === 'replies') {
-        // Load replies for this user
-        const { supabase } = await import('@/lib/supabase');
         const { data: replies } = await supabase
           .from('thread_replies')
           .select('thread_id')
@@ -103,7 +141,6 @@ export function ProfilePage() {
           .limit(20);
         if (replies && replies.length > 0) {
           const threadIds = [...new Set(replies.map((r: any) => r.thread_id))];
-          // fetch threads for these IDs
           const { data: replyThreads } = await supabase
             .from('threads')
             .select('*, user:user_profiles(id, username, email, avatar_url)')
@@ -222,20 +259,18 @@ export function ProfilePage() {
               {isOwnProfile && (
                 <>
                   <DropdownMenuItem onClick={() => navigate('/analytics')}>
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Creator Analytics
+                    <BarChart3 className="h-4 w-4 mr-2" /> Creator Analytics
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/monetization')}>
+                    <DollarSign className="h-4 w-4 mr-2" /> Monetization
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/create-ad')}>
-                    <Megaphone className="h-4 w-4 mr-2" />
-                    Promote Content
+                    <Megaphone className="h-4 w-4 mr-2" /> Promote Content
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/settings')}>
+                    <Settings className="h-4 w-4 mr-2" /> Settings
                   </DropdownMenuItem>
                 </>
-              )}
-              {isOwnProfile && (
-                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
-                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -271,6 +306,16 @@ export function ProfilePage() {
                 <Button variant="outline" size="icon" className="rounded-full h-9 w-9" onClick={handleShare}>
                   <Share2 className="h-4 w-4" />
                 </Button>
+                {isMonetized && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs h-9 px-3 text-amber-500 border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                    onClick={() => setShowTip(true)}
+                  >
+                    <Gift className="h-3.5 w-3.5 mr-1" /> Tip
+                  </Button>
+                )}
                 <Button variant="outline" size="icon" className="rounded-full h-9 w-9" onClick={handleMessage}>
                   <MessageCircle className="h-4 w-4" />
                 </Button>
@@ -301,6 +346,11 @@ export function ProfilePage() {
             {profile.threads_count && profile.threads_count > 50 && (
               <BadgeCheck className="h-5 w-5 text-primary" />
             )}
+            {isMonetized && (
+              <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                <DollarSign className="h-2.5 w-2.5" /> Creator
+              </span>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">@{profile.username}</p>
 
@@ -308,7 +358,6 @@ export function ProfilePage() {
             <p className="mt-2.5 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{profile.bio}</p>
           )}
 
-          {/* Meta info */}
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
             {profile.location && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -343,7 +392,7 @@ export function ProfilePage() {
 
           {/* Stats */}
           <div className="flex gap-6 mt-4 pt-4 border-t border-border/60">
-            <div className="text-center cursor-pointer hover:opacity-70 transition-opacity">
+            <div className="text-center">
               <p className="text-lg font-bold">{(profile.threads_count || 0).toLocaleString()}</p>
               <p className="text-xs text-muted-foreground">Threads</p>
             </div>
@@ -365,6 +414,23 @@ export function ProfilePage() {
               </button>
             )}
           </div>
+
+          {/* Monetization CTA for own profile */}
+          {isOwnProfile && !isMonetized && (
+            <button
+              onClick={() => navigate('/monetization')}
+              className="mt-4 w-full flex items-center gap-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-3.5 text-left hover:opacity-90 transition-opacity"
+            >
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0">
+                <DollarSign className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Start earning on Threads</p>
+                <p className="text-xs text-amber-600 dark:text-amber-500">Enable tips, subscriptions & exclusive content</p>
+              </div>
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Set up →</span>
+            </button>
+          )}
         </div>
 
         <AdSlot position="profile" className="mx-4 mb-2" />
@@ -419,25 +485,17 @@ export function ProfilePage() {
         ) : displayThreads.length === 0 ? (
           <div className="py-16 text-center">
             {activeTab === 'likes' ? (
-              <>
-                <Heart className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-                <p className="text-muted-foreground text-sm">No liked threads yet</p>
-              </>
+              <><Heart className="h-10 w-10 text-muted-foreground mx-auto mb-2" /><p className="text-muted-foreground text-sm">No liked threads yet</p></>
             ) : activeTab === 'replies' ? (
-              <>
-                <MessageCircle className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-                <p className="text-muted-foreground text-sm">No replies yet</p>
-              </>
+              <><MessageCircle className="h-10 w-10 text-muted-foreground mx-auto mb-2" /><p className="text-muted-foreground text-sm">No replies yet</p></>
             ) : (
-              <>
+              <div>
                 <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
                   <Repeat2 className="h-7 w-7 text-muted-foreground" />
                 </div>
                 <p className="text-muted-foreground text-sm font-medium">No threads yet</p>
-                {isOwnProfile && (
-                  <p className="text-xs text-muted-foreground mt-1">Share your first thought with the world</p>
-                )}
-              </>
+                {isOwnProfile && <p className="text-xs text-muted-foreground mt-1">Share your first thought with the world</p>}
+              </div>
             )}
           </div>
         ) : (
@@ -450,6 +508,14 @@ export function ProfilePage() {
       </main>
 
       <BottomNav />
+
+      {/* Tip Modal */}
+      {showTip && profile && (
+        <TipModal
+          creator={profile}
+          onClose={() => setShowTip(false)}
+        />
+      )}
     </div>
   );
 }

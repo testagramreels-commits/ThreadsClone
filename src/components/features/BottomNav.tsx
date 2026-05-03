@@ -1,7 +1,7 @@
 import { Home, Search, PenSquare, Bell, User, Video } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getUnreadNotificationsCount } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CreateThread } from './CreateThread';
@@ -12,11 +12,34 @@ export function BottomNav() {
   const { user } = useAuth();
   const [unread, setUnread] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const ticking = useRef(false);
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
+
+  // Hide on scroll down, show on scroll up
+  useEffect(() => {
+    const handleScroll = () => {
+      if (ticking.current) return;
+      ticking.current = true;
+      requestAnimationFrame(() => {
+        const currentY = window.scrollY;
+        const diff = currentY - lastScrollY.current;
+        // Only trigger after scrolling 10px to avoid jitter
+        if (Math.abs(diff) > 10) {
+          setVisible(diff < 0 || currentY < 60);
+          lastScrollY.current = currentY;
+        }
+        ticking.current = false;
+      });
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -30,7 +53,6 @@ export function BottomNav() {
   // Hide on video page for true immersive TikTok experience
   if (location.pathname === '/videos') return null;
 
-  // Items: Home | Search | [Create Center] | Videos | Activity | Profile
   const leftItems = [
     {
       icon: Home,
@@ -96,9 +118,7 @@ export function BottomNav() {
       >
         <div className="relative">
           <Icon
-            className={`h-[22px] w-[22px] transition-all duration-200 ${
-              active ? 'scale-110' : ''
-            }`}
+            className={`h-[22px] w-[22px] transition-all duration-200 ${active ? 'scale-110' : ''}`}
             strokeWidth={active ? 2.5 : 1.8}
           />
           {badge > 0 && (
@@ -107,11 +127,7 @@ export function BottomNav() {
             </span>
           )}
         </div>
-        <span
-          className={`text-[10px] font-medium transition-colors leading-none ${
-            active ? 'text-foreground' : ''
-          }`}
-        >
+        <span className={`text-[10px] font-medium transition-colors leading-none ${active ? 'text-foreground' : ''}`}>
           {label}
         </span>
         {active && (
@@ -124,11 +140,14 @@ export function BottomNav() {
   return (
     <>
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 bg-background/96 backdrop-blur-xl border-t border-border/50"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', height: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
+        className="fixed bottom-0 left-0 right-0 z-50 bg-background/96 backdrop-blur-xl border-t border-border/50 transition-transform duration-300 ease-in-out"
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          height: 'calc(56px + env(safe-area-inset-bottom, 0px))',
+          transform: visible ? 'translateY(0)' : 'translateY(100%)',
+        }}
       >
         <div className="flex items-center h-14 max-w-2xl mx-auto px-1">
-          {/* Left items */}
           {leftItems.map(item => (
             <NavButton key={item.label} {...item} />
           ))}
@@ -144,7 +163,6 @@ export function BottomNav() {
             </button>
           </div>
 
-          {/* Right items */}
           {rightItems.map(item => (
             <NavButton key={item.label} {...item} />
           ))}

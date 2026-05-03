@@ -24,6 +24,7 @@ import { BookmarksPage } from '@/pages/BookmarksPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { CreatorAnalyticsPage } from '@/pages/CreatorAnalyticsPage';
 import { CreateAdPage } from '@/pages/CreateAdPage';
+import { MonetizationPage } from '@/pages/MonetizationPage';
 
 import { Toaster } from '@/components/ui/toaster';
 import { LiveChatWidget } from '@/components/features/LiveChatWidget';
@@ -143,6 +144,7 @@ function AppRoutes() {
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><CreatorAnalyticsPage /></ProtectedRoute>} />
       <Route path="/create-ad" element={<ProtectedRoute><CreateAdPage /></ProtectedRoute>} />
+      <Route path="/monetization" element={<ProtectedRoute><MonetizationPage /></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
