@@ -89,8 +89,8 @@ export function BottomNav() {
     {
       icon: User,
       label: 'Profile',
-      path: user?.username ? `/profile/${user.username}` : '/login',
-      action: () => navigate(user?.username ? `/profile/${user.username}` : '/login'),
+      path: user?.username ? `/profile/${user.username}` : user?.id ? `/profile/${user.id}` : '/login',
+      action: () => navigate(user?.username ? `/profile/${user.username}` : user?.id ? `/profile/${user.id}` : '/login'),
       badge: 0,
     },
   ];

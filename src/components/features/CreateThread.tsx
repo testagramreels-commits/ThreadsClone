@@ -1,7 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Image as ImageIcon, Video, X, Send, Loader2, Upload, BarChart2 } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Image as ImageIcon, Video, X, Send, Loader2, BarChart2, Clock, Lock, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createThread, uploadImage, uploadVideo } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
@@ -26,6 +25,9 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
   const [uploadProgress, setUploadProgress] = useState(0);
   const [poll, setPoll] = useState<{ question: string; options: string[]; duration: number } | null>(null);
   const [showPoll, setShowPoll] = useState(false);
+  const [isExclusive, setIsExclusive] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [showSchedule, setShowSchedule] = useState(false);
   const imageRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -48,9 +50,7 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
     });
     valid.forEach(file => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setMediaFiles(prev => [...prev, { file, preview: reader.result as string, type }]);
-      };
+      reader.onloadend = () => setMediaFiles(prev => [...prev, { file, preview: reader.result as string, type }]);
       reader.readAsDataURL(file);
     });
     e.target.value = '';
@@ -65,23 +65,29 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
       toast({ title: 'Too long', description: `Max ${MAX_CHARS} characters`, variant: 'destructive' });
       return;
     }
+
+    // Validate schedule time is in the future
+    if (scheduledAt) {
+      const schedDate = new Date(scheduledAt);
+      if (schedDate <= new Date()) {
+        toast({ title: 'Invalid schedule time', description: 'Scheduled time must be in the future', variant: 'destructive' });
+        return;
+      }
+    }
+
     setLoading(true);
     setUploadProgress(0);
     try {
       let imageUrl: string | undefined;
       let videoUrl: string | undefined;
 
-      // Upload media with retry logic
       for (let i = 0; i < mediaFiles.length; i++) {
         const { file, type } = mediaFiles[i];
         setUploadProgress(Math.round((i / mediaFiles.length) * 70));
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            if (type === 'video') {
-              videoUrl = await uploadVideo(file);
-            } else {
-              imageUrl = await uploadImage(file, 'thread-images');
-            }
+            if (type === 'video') videoUrl = await uploadVideo(file);
+            else imageUrl = await uploadImage(file, 'thread-images');
             break;
           } catch (err) {
             if (attempt === 2) throw err;
@@ -91,23 +97,47 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
       }
 
       setUploadProgress(80);
-      const thread = await createThread(content.trim(), imageUrl, videoUrl);
+
+      // Build thread insert data
+      const threadInsert: any = {
+        user_id: user.id,
+        content: content.trim(),
+        image_url: imageUrl,
+        video_url: videoUrl,
+        media_type: videoUrl ? 'video' : imageUrl ? 'image' : 'text',
+      };
+      if (scheduledAt) threadInsert.scheduled_at = new Date(scheduledAt).toISOString();
+
+      const { data: thread, error: threadError } = await supabase
+        .from('threads')
+        .insert(threadInsert)
+        .select('*, user:user_profiles(id, username, email, avatar_url)')
+        .single();
+      if (threadError) throw threadError;
+
       setUploadProgress(90);
 
       // Create poll if any
       if (poll && thread.id) {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const expiresAt = new Date();
-          expiresAt.setHours(expiresAt.getHours() + poll.duration);
-          await supabase.from('polls').insert({
-            thread_id: thread.id,
-            user_id: authUser.id,
-            question: poll.question,
-            options: poll.options,
-            ends_at: expiresAt.toISOString(),
-          });
-        }
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + poll.duration);
+        await supabase.from('polls').insert({
+          thread_id: thread.id,
+          user_id: user.id,
+          question: poll.question,
+          options: poll.options,
+          ends_at: expiresAt.toISOString(),
+        });
+      }
+
+      // Mark as exclusive if toggled
+      if (isExclusive && thread.id) {
+        await supabase.from('exclusive_posts').insert({
+          thread_id: thread.id,
+          creator_id: user.id,
+          required_tier: 'basic',
+          preview_text: content.substring(0, 80) + (content.length > 80 ? '...' : ''),
+        });
       }
 
       setUploadProgress(100);
@@ -115,8 +145,16 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
       setMediaFiles([]);
       setPoll(null);
       setShowPoll(false);
+      setIsExclusive(false);
+      setScheduledAt('');
+      setShowSchedule(false);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
-      toast({ title: 'Thread posted!' });
+
+      if (scheduledAt) {
+        toast({ title: 'Thread scheduled!', description: `Will publish at ${new Date(scheduledAt).toLocaleString()}` });
+      } else {
+        toast({ title: 'Thread posted!' });
+      }
       onThreadCreated?.();
     } catch (error: any) {
       toast({ title: 'Failed to post', description: error.message, variant: 'destructive' });
@@ -129,6 +167,9 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
   const remaining = MAX_CHARS - content.length;
   const isOverLimit = remaining < 0;
 
+  // Minimum datetime for scheduling (now + 5 mins)
+  const minDateTime = new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16);
+
   return (
     <div className="border-b border-border/60 px-4 py-3">
       <div className="flex gap-3">
@@ -140,7 +181,20 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground mb-1">{user?.username}</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-sm font-semibold text-foreground">{user?.username}</p>
+            {isExclusive && (
+              <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                <Lock className="h-2.5 w-2.5" /> Exclusive
+              </span>
+            )}
+            {scheduledAt && (
+              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                <Clock className="h-2.5 w-2.5" /> Scheduled
+              </span>
+            )}
+          </div>
+
           <textarea
             ref={textareaRef}
             value={content}
@@ -160,10 +214,7 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
                   ) : (
                     <img src={m.preview} alt="Preview" className="w-full h-full object-cover" />
                   )}
-                  <button
-                    onClick={() => removeMedia(i)}
-                    className="absolute top-1 right-1 h-6 w-6 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
+                  <button onClick={() => removeMedia(i)} className="absolute top-1 right-1 h-6 w-6 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <X className="h-3.5 w-3.5 text-white" />
                   </button>
                 </div>
@@ -174,14 +225,30 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
           {/* Poll */}
           {showPoll && <PollCreator onPollChange={setPoll} />}
 
+          {/* Schedule picker */}
+          {showSchedule && (
+            <div className="mt-2 flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                min={minDateTime}
+                onChange={e => setScheduledAt(e.target.value)}
+                className="flex-1 text-xs bg-muted border border-border rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+              {scheduledAt && (
+                <button onClick={() => { setScheduledAt(''); setShowSchedule(false); }} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Upload progress */}
           {loading && uploadProgress > 0 && (
             <div className="mt-2">
               <div className="h-1 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
+                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {uploadProgress < 80 ? 'Uploading media...' : uploadProgress < 95 ? 'Creating thread...' : 'Done!'}
@@ -191,31 +258,22 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
 
           {/* Action bar */}
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/40">
-            <div className="flex items-center gap-0.5">
-              <button
-                onClick={() => imageRef.current?.click()}
-                disabled={loading}
-                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              >
+            <div className="flex items-center gap-0.5 flex-wrap">
+              <button onClick={() => imageRef.current?.click()} disabled={loading} className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Add image">
                 <ImageIcon className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => videoRef.current?.click()}
-                disabled={loading}
-                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              >
+              <button onClick={() => videoRef.current?.click()} disabled={loading} className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Add video">
                 <Video className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setShowPoll(v => !v)}
-                disabled={loading}
-                className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
-                  showPoll ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
-                }`}
-              >
+              <button onClick={() => setShowPoll(v => !v)} disabled={loading} className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${showPoll ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'}`} title="Add poll">
                 <BarChart2 className="h-4 w-4" />
               </button>
-
+              <button onClick={() => { setShowSchedule(v => !v); }} disabled={loading} className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${showSchedule || scheduledAt ? 'text-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'text-muted-foreground hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30'}`} title="Schedule post">
+                <Clock className="h-4 w-4" />
+              </button>
+              <button onClick={() => setIsExclusive(v => !v)} disabled={loading} className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${isExclusive ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30'}`} title="Exclusive (subscribers only)">
+                <Lock className="h-4 w-4" />
+              </button>
               <input ref={imageRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleMediaSelect(e, 'image')} />
               <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={e => handleMediaSelect(e, 'video')} />
             </div>
@@ -232,7 +290,7 @@ export function CreateThread({ onThreadCreated, placeholder = "What's on your mi
                 size="sm"
                 className="rounded-full px-4 h-8 text-xs font-semibold gap-1.5"
               >
-                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Send className="h-3.5 w-3.5" />Post</>}
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : scheduledAt ? <><Clock className="h-3.5 w-3.5" />Schedule</> : <><Send className="h-3.5 w-3.5" />Post</>}
               </Button>
             </div>
           </div>

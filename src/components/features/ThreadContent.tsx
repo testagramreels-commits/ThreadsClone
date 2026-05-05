@@ -33,7 +33,7 @@ export function ThreadContent({ content, className = '', expandable = false }: T
             className="content-hashtag"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/search?q=${encodeURIComponent(token)}`);
+              navigate(`/hashtag/${token.substring(1)}`);
             }}
           >
             {token}

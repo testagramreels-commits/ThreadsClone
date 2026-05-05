@@ -6,6 +6,7 @@ export interface UserProfile {
   bio?: string;
   website?: string;
   location?: string;
+  is_verified?: boolean;
   created_at?: string;
 }
 
@@ -29,6 +30,8 @@ export interface Thread {
   is_liked?: boolean;
   is_reposted?: boolean;
   is_bookmarked?: boolean;
+  is_exclusive?: boolean;
+  scheduled_at?: string;
   quoted_thread?: Thread;
 }
 
@@ -86,6 +89,7 @@ export interface UserWithStats extends UserProfile {
   following_count?: number;
   threads_count?: number;
   is_following?: boolean;
+  is_verified?: boolean;
   analytics?: ProfileAnalytics;
   verified?: boolean;
 }

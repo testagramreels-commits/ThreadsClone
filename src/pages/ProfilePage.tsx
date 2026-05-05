@@ -43,25 +43,71 @@ export function ProfilePage() {
   const [isMonetized, setIsMonetized] = useState(false);
 
   const isOwnProfile =
-    currentUser?.username === username ||
-    currentUser?.id === username;
+    !!(currentUser && (
+      currentUser.username === username ||
+      currentUser.id === username ||
+      (username && currentUser.email?.split('@')[0] === username)
+    ));
 
   useEffect(() => {
-    if (!username) {
+    if (!username || username === 'undefined' || username === 'null') {
       if (currentUser?.username) navigate(`/profile/${currentUser.username}`, { replace: true });
-      else navigate('/login', { replace: true });
+      else if (currentUser?.id) {
+        // Try to load by ID
+        loadProfileById(currentUser.id);
+      } else navigate('/login', { replace: true });
       return;
     }
     loadProfile();
-  }, [username]);
+  }, [username, currentUser?.id]);
+
+  const loadProfileById = async (userId: string) => {
+    setLoading(true);
+    try {
+      const { data: byId } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      if (byId) {
+        if (byId.username) {
+          navigate(`/profile/${byId.username}`, { replace: true });
+        } else {
+          // No username set yet - show profile directly
+          const [followersRes, followingRes, threadsRes] = await Promise.all([
+            supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', byId.id),
+            supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', byId.id),
+            supabase.from('threads').select('*', { count: 'exact', head: true }).eq('user_id', byId.id),
+          ]);
+          const profileData: UserWithStats = {
+            ...byId,
+            followers_count: followersRes.count || 0,
+            following_count: followingRes.count || 0,
+            threads_count: threadsRes.count || 0,
+            is_following: false,
+          };
+          setProfile(profileData);
+          const t = await getUserThreads(byId.id);
+          setThreads(t);
+        }
+      } else {
+        navigate('/', { replace: true });
+      }
+    } catch (e) {
+      console.error('loadProfileById error:', e);
+      navigate('/', { replace: true });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadProfile = async () => {
-    if (!username) return;
+    if (!username || username === 'undefined' || username === 'null') return;
     setLoading(true);
     try {
       let profileData: UserWithStats | null = null;
 
-      // 1. Try lookup by username
+      // 1. Try lookup by username first
       const { data: byUsername } = await supabase
         .from('user_profiles')
         .select('*')
@@ -70,30 +116,37 @@ export function ProfilePage() {
 
       if (byUsername) {
         profileData = await getUserProfile(username);
-      } else if (currentUser) {
-        // 2. Maybe the param is actually the user's own ID or the username isn't set yet
-        if (username === currentUser.id || username === currentUser.username) {
-          // Load by current user's actual username if available
-          if (currentUser.username) {
-            profileData = await getUserProfile(currentUser.username);
-            navigate(`/profile/${currentUser.username}`, { replace: true });
-          } else {
-            // User has no username yet — load their profile by ID
-            const { data: byId } = await supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('id', currentUser.id)
-              .maybeSingle();
-            if (byId) {
-              // Use id as username fallback for profile loading
-              profileData = {
-                ...byId,
-                followers_count: 0,
-                following_count: 0,
-                threads_count: 0,
-                is_following: false,
-              } as UserWithStats;
-            }
+      } else {
+        // 2. Try lookup by ID (maybe username is actually a UUID)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(username)) {
+          const { data: byId } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', username)
+            .maybeSingle();
+          if (byId?.username) {
+            navigate(`/profile/${byId.username}`, { replace: true });
+            return;
+          } else if (byId) {
+            const [followersRes, followingRes, threadsRes] = await Promise.all([
+              supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', byId.id),
+              supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', byId.id),
+              supabase.from('threads').select('*', { count: 'exact', head: true }).eq('user_id', byId.id),
+            ]);
+            profileData = {
+              ...byId,
+              followers_count: followersRes.count || 0,
+              following_count: followingRes.count || 0,
+              threads_count: threadsRes.count || 0,
+              is_following: false,
+            } as UserWithStats;
+          }
+        } else if (currentUser) {
+          // 3. Check if it's the current user's profile by other means
+          if (username === currentUser.id) {
+            await loadProfileById(currentUser.id);
+            return;
           }
         }
       }
@@ -160,6 +213,9 @@ export function ProfilePage() {
     setActiveTab(tab);
     if (profile) loadTabContent(tab, profile.id);
   };
+
+  // ---- Add isVerified helper ----
+  const isVerified = (profile?.is_verified) || ((profile?.followers_count || 0) >= 500);
 
   const handleFollow = async () => {
     if (!profile) return;
@@ -242,7 +298,7 @@ export function ProfilePage() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <h1 className="font-bold text-base truncate">{profile.username}</h1>
-              {profile.threads_count && profile.threads_count > 50 && (
+              {isVerified && (
                 <BadgeCheck className="h-4 w-4 text-primary flex-shrink-0" />
               )}
             </div>
@@ -343,7 +399,7 @@ export function ProfilePage() {
         <div className="px-4 pt-16 pb-4">
           <div className="flex items-center gap-2 mb-0.5">
             <h2 className="text-xl font-bold">{profile.username}</h2>
-            {profile.threads_count && profile.threads_count > 50 && (
+            {isVerified && (
               <BadgeCheck className="h-5 w-5 text-primary" />
             )}
             {isMonetized && (

@@ -6,8 +6,9 @@ export async function getThreads() {
     .from('threads')
     .select(`
       *,
-      user:user_profiles(id, username, email, avatar_url)
+      user:user_profiles(id, username, email, avatar_url, is_verified)
     `)
+    .is('scheduled_at', null)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -273,9 +274,10 @@ export async function getUserThreads(userId: string) {
     .from('threads')
     .select(`
       *,
-      user:user_profiles(id, username, email, avatar_url, bio, website, location)
+      user:user_profiles(id, username, email, avatar_url, is_verified, bio, website, location)
     `)
     .eq('user_id', userId)
+    .is('scheduled_at', null)
     .order('created_at', { ascending: false });
 
   if (error) throw error;

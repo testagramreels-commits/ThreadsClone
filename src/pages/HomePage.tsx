@@ -24,7 +24,7 @@ const TABS = [
   { key: 'mentions', label: 'Mentions', icon: <AtSign className="h-3.5 w-3.5" /> },
 ] as const;
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 // Thread skeleton for loading states
 function ThreadSkeleton() {

@@ -3,8 +3,6 @@ import {
   Routes,
   Route,
   Navigate,
-  useNavigate,
-  useLocation,
 } from 'react-router-dom';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -25,11 +23,13 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { CreatorAnalyticsPage } from '@/pages/CreatorAnalyticsPage';
 import { CreateAdPage } from '@/pages/CreateAdPage';
 import { MonetizationPage } from '@/pages/MonetizationPage';
+import { HashtagPage } from '@/pages/HashtagPage';
+import { LeaderboardPage } from '@/pages/LeaderboardPage';
 
 import { Toaster } from '@/components/ui/toaster';
 import { LiveChatWidget } from '@/components/features/LiveChatWidget';
 
-import React, { Component, ReactNode, useEffect, Suspense, lazy } from 'react';
+import React, { Component, ReactNode } from 'react';
 
 /* =========================
    ERROR BOUNDARY
@@ -76,7 +76,7 @@ class ErrorBoundary extends Component<
 }
 
 /* =========================
-   THEME INIT (runs once)
+   THEME INIT
 ========================= */
 const savedTheme = localStorage.getItem('theme');
 if (savedTheme === 'dark') document.documentElement.classList.add('dark');
@@ -86,7 +86,7 @@ else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
 }
 
 /* =========================
-   LOADING SCREEN
+   SPLASH SCREEN
 ========================= */
 function SplashScreen() {
   return (
@@ -99,11 +99,7 @@ function SplashScreen() {
       </div>
       <div className="flex gap-1 mt-2">
         {[0, 1, 2].map(i => (
-          <div
-            key={i}
-            className="h-2 w-2 rounded-full bg-primary animate-bounce"
-            style={{ animationDelay: `${i * 0.15}s` }}
-          />
+          <div key={i} className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
         ))}
       </div>
     </div>
@@ -115,7 +111,6 @@ function SplashScreen() {
 ========================= */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-
   if (loading) return <SplashScreen />;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
@@ -145,6 +140,8 @@ function AppRoutes() {
       <Route path="/analytics" element={<ProtectedRoute><CreatorAnalyticsPage /></ProtectedRoute>} />
       <Route path="/create-ad" element={<ProtectedRoute><CreateAdPage /></ProtectedRoute>} />
       <Route path="/monetization" element={<ProtectedRoute><MonetizationPage /></ProtectedRoute>} />
+      <Route path="/hashtag/:tag" element={<ProtectedRoute><HashtagPage /></ProtectedRoute>} />
+      <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

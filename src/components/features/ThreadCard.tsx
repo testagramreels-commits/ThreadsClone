@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Heart, MessageCircle, Repeat2, Share2, MoreHorizontal, Trash2, Edit3 } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, MoreHorizontal, Trash2, Edit3, BadgeCheck, Lock } from 'lucide-react';
 import { Thread } from '@/types/database';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -166,10 +166,11 @@ export function ThreadCard({ thread, isDetailView = false, onUpdate }: ThreadCar
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
               <span
-                className="font-semibold text-sm cursor-pointer hover:underline"
+                className="font-semibold text-sm cursor-pointer hover:underline flex items-center gap-1"
                 onClick={(e) => { e.stopPropagation(); navigate(`/profile/${thread.user?.username}`); }}
               >
                 {thread.user?.username}
+                {(thread.user as any)?.is_verified && <BadgeCheck className="h-3.5 w-3.5 text-primary" />}
               </span>
               <span className="text-muted-foreground text-xs">·</span>
               <span className="text-muted-foreground text-xs">
@@ -219,7 +220,15 @@ export function ThreadCard({ thread, isDetailView = false, onUpdate }: ThreadCar
             </DropdownMenu>
           </div>
 
-          {/* Editing mode */}
+          {/* Exclusive badge */}
+          {thread.is_exclusive && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl w-fit">
+              <Lock className="h-3 w-3 text-amber-600" />
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Exclusive · Subscribers only</span>
+            </div>
+          )}
+
+          {/* Content */}
           {editing ? (
             <div onClick={e => e.stopPropagation()}>
               <textarea

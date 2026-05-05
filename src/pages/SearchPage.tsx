@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, X, TrendingUp, User, Hash, Loader2 } from 'lucide-react';
+import { Search, X, TrendingUp, User, Hash, Loader2, Trophy } from 'lucide-react';
 import { BottomNav } from '@/components/features/BottomNav';
 import { ThreadCard } from '@/components/features/ThreadCard';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -92,7 +92,6 @@ export function SearchPage() {
     const val = e.target.value;
     setQuery(val);
     if (!val.trim()) { setShowAutocomplete(false); setResults([]); return; }
-
     clearTimeout(autocompleteDebounce.current);
     clearTimeout(searchDebounce.current);
     autocompleteDebounce.current = setTimeout(() => fetchAutocomplete(val), 250);
@@ -104,6 +103,11 @@ export function SearchPage() {
     setShowAutocomplete(false);
     setSearchParams({ q });
     handleSearch(q);
+  };
+
+  const navigateToHashtag = (tag: string) => {
+    const clean = tag.startsWith('#') ? tag.slice(1) : tag;
+    navigate(`/hashtag/${clean}`);
   };
 
   const clearSearch = () => {
@@ -158,7 +162,7 @@ export function SearchPage() {
                     {autocomplete.users.map(u => (
                       <button
                         key={u.id}
-                        onClick={() => selectSuggestion(`@${u.username}`)}
+                        onClick={() => navigate(`/profile/${u.username}`)}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent text-left transition-colors"
                       >
                         <Avatar className="h-8 w-8 flex-shrink-0">
@@ -181,7 +185,7 @@ export function SearchPage() {
                     {autocomplete.hashtags.map(tag => (
                       <button
                         key={tag}
-                        onClick={() => selectSuggestion(tag)}
+                        onClick={() => navigateToHashtag(tag)}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent text-left transition-colors"
                       >
                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -197,12 +201,29 @@ export function SearchPage() {
           </div>
         </div>
 
-        {/* Empty state: trending + suggested users */}
+        {/* Empty state: leaderboard promo + suggested users + trending */}
         {!isSearching && (
           <div>
+            {/* Leaderboard promo */}
+            <div className="px-4 pt-4 pb-2">
+              <button
+                onClick={() => navigate('/leaderboard')}
+                className="w-full flex items-center gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl hover:opacity-90 transition-opacity text-left"
+              >
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0">
+                  <Trophy className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Creator Leaderboard</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500">Top creators by followers, likes & earnings</p>
+                </div>
+                <span className="text-xs text-amber-700 dark:text-amber-400 font-semibold">View →</span>
+              </button>
+            </div>
+
             {/* Suggested Users */}
             {suggestedUsers.length > 0 && (
-              <div className="px-4 pt-5 pb-3">
+              <div className="px-4 pt-3 pb-3">
                 <h2 className="text-base font-bold mb-3 flex items-center gap-2">
                   <User className="h-4 w-4" /> Who to follow
                 </h2>
@@ -237,7 +258,7 @@ export function SearchPage() {
                   {trending.map((item, index) => (
                     <button
                       key={item.hashtag}
-                      onClick={() => selectSuggestion(item.hashtag)}
+                      onClick={() => navigateToHashtag(item.hashtag)}
                       className="w-full flex items-center justify-between py-3 border-b border-border/40 last:border-0 hover:bg-accent rounded-lg px-2 -mx-2 transition-colors"
                     >
                       <div>
