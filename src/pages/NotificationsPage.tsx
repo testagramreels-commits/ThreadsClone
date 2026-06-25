@@ -6,16 +6,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/features/BottomNav';
 import { getNotifications, markAllNotificationsAsRead } from '@/lib/api';
-import { Notification } from '@/types/database';
+import type { Notification as AppNotification } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { isPushSupported, requestNotificationPermission, getNotificationPermission } from '@/lib/notifications';
-import { supabase } from '@/lib/supabase';
 
 export function NotificationsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [requestingPush, setRequestingPush] = useState(false);
@@ -62,12 +61,12 @@ export function NotificationsPage() {
     }
   };
 
-  const handleNotificationClick = async (notification: Notification) => {
+  const handleNotificationClick = async (notification: AppNotification) => {
     if (notification.thread_id) navigate(`/thread/${notification.thread_id}`);
     else if (notification.type === 'follow' && notification.actor) navigate(`/profile/${notification.actor.username}`);
   };
 
-  const getIcon = (type: string) => {
+  const getNotifIcon = (type: string) => {
     switch (type) {
       case 'like':    return <Heart className="h-[13px] w-[13px] text-red-500 fill-current" />;
       case 'reply':   return <MessageCircle className="h-[13px] w-[13px] text-blue-500" />;
@@ -79,7 +78,7 @@ export function NotificationsPage() {
     }
   };
 
-  const getText = (n: Notification) => {
+  const getText = (n: AppNotification) => {
     const actor = n.actor?.username ? `@${n.actor.username}` : 'Someone';
     switch (n.type) {
       case 'like':    return <><span className="font-semibold">{actor}</span> liked your thread</>;
@@ -171,12 +170,12 @@ export function NotificationsPage() {
                         </AvatarFallback>
                       </Avatar>
                       <div className="absolute -bottom-0.5 -right-0.5 w-[18px] h-[18px] rounded-full bg-background flex items-center justify-center border border-border shadow-sm">
-                        {getIcon(n.type)}
+                        {getNotifIcon(n.type)}
                       </div>
                     </div>
                   ) : (
                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                      {getIcon(n.type)}
+                      {getNotifIcon(n.type)}
                     </div>
                   )}
                 </div>
