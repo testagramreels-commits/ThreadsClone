@@ -29,7 +29,7 @@ interface PlatformStats {
   videoThreads: number;
 }
 
-type AdminTab = 'overview' | 'ads' | 'user-ads' | 'storage';
+type AdminTab = 'overview' | 'ads' | 'user-ads' | 'storage' | 'verification';
 
 export function AdminDashboardPage() {
   const navigate = useNavigate();
@@ -143,6 +143,7 @@ export function AdminDashboardPage() {
     { key: 'overview', label: 'Overview', icon: <BarChart3 className="h-4 w-4" /> },
     { key: 'ads', label: 'Ad System', icon: <TrendingUp className="h-4 w-4" /> },
     { key: 'user-ads', label: `User Ads ${userAds.filter(a => a.status === 'pending').length > 0 ? `(${userAds.filter(a => a.status === 'pending').length})` : ''}`, icon: <Megaphone className="h-4 w-4" /> },
+    { key: 'verification', label: 'Verification', icon: <ShieldCheck className="h-4 w-4" /> },
     { key: 'storage', label: 'Storage', icon: <HardDrive className="h-4 w-4" /> },
   ];
 
@@ -362,6 +363,25 @@ export function AdminDashboardPage() {
                 </Card>
               ))
             )}
+          </div>
+        )}
+
+        {/* VERIFICATION */}
+        {activeTab === 'verification' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <ShieldCheck className="h-10 w-10 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-bold text-lg">Admin Verification Panel</h2>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Grant or revoke verification badges for users. Users with 500+ followers are auto-eligible.
+              </p>
+            </div>
+            <Button onClick={() => navigate('/admin/verification')} className="rounded-full gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Open Verification Panel
+            </Button>
           </div>
         )}
 

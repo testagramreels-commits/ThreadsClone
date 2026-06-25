@@ -25,9 +25,11 @@ import { CreateAdPage } from '@/pages/CreateAdPage';
 import { MonetizationPage } from '@/pages/MonetizationPage';
 import { HashtagPage } from '@/pages/HashtagPage';
 import { LeaderboardPage } from '@/pages/LeaderboardPage';
+import { ScheduledPostsPage } from '@/pages/ScheduledPostsPage';
+import { ExclusiveFeedPage } from '@/pages/ExclusiveFeedPage';
+import { AdminVerificationPage } from '@/pages/AdminVerificationPage';
 
 import { Toaster } from '@/components/ui/toaster';
-import { LiveChatWidget } from '@/components/features/LiveChatWidget';
 
 import React, { Component, ReactNode } from 'react';
 
@@ -129,10 +131,11 @@ function AppRoutes() {
       <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/thread/:threadId" element={<ProtectedRoute><ThreadDetailPage /></ProtectedRoute>} />
       <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
-      <Route path="/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
+      <Route path="/activity" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
       <Route path="/videos" element={<ProtectedRoute><VideoFeedPage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
-      <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+      <Route path="/admin/verification" element={<ProtectedRoute><AdminVerificationPage /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
       <Route path="/messages/:conversationId" element={<ProtectedRoute><MessageConversationPage /></ProtectedRoute>} />
       <Route path="/bookmarks" element={<ProtectedRoute><BookmarksPage /></ProtectedRoute>} />
@@ -142,6 +145,8 @@ function AppRoutes() {
       <Route path="/monetization" element={<ProtectedRoute><MonetizationPage /></ProtectedRoute>} />
       <Route path="/hashtag/:tag" element={<ProtectedRoute><HashtagPage /></ProtectedRoute>} />
       <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
+      <Route path="/scheduled" element={<ProtectedRoute><ScheduledPostsPage /></ProtectedRoute>} />
+      <Route path="/exclusive" element={<ProtectedRoute><ExclusiveFeedPage /></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -157,7 +162,6 @@ function App() {
       <BrowserRouter>
         <AppRoutes />
         <Toaster />
-        <LiveChatWidget />
       </BrowserRouter>
     </ErrorBoundary>
   );

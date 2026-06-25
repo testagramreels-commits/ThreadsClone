@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { AtSign, LogOut, Shield, Bell, MessageCircle, Bookmark, Moon, Sun, Settings, Trophy } from 'lucide-react';
+import { AtSign, LogOut, Shield, Bell, MessageCircle, Bookmark, Moon, Sun, Settings, Trophy, CalendarClock, Crown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -132,6 +132,12 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/leaderboard')}>
                   <Trophy className="mr-2 h-4 w-4" /> Leaderboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/exclusive')}>
+                  <Crown className="mr-2 h-4 w-4" /> Exclusive Feed
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/scheduled')}>
+                  <CalendarClock className="mr-2 h-4 w-4" /> Scheduled Posts
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/bookmarks')}>
                   <Bookmark className="mr-2 h-4 w-4" /> Bookmarks

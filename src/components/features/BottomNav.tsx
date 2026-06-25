@@ -21,6 +21,13 @@ export function BottomNav() {
     return location.pathname.startsWith(path);
   };
 
+  // Clear unread badge when on notifications page
+  useEffect(() => {
+    if (location.pathname === '/activity') {
+      setUnread(0);
+    }
+  }, [location.pathname]);
+
   // Hide on scroll down, show on scroll up
   useEffect(() => {
     const handleScroll = () => {
@@ -29,9 +36,8 @@ export function BottomNav() {
       requestAnimationFrame(() => {
         const currentY = window.scrollY;
         const diff = currentY - lastScrollY.current;
-        // Only trigger after scrolling 10px to avoid jitter
-        if (Math.abs(diff) > 10) {
-          setVisible(diff < 0 || currentY < 60);
+        if (Math.abs(diff) > 12) {
+          setVisible(diff < 0 || currentY < 80);
           lastScrollY.current = currentY;
         }
         ticking.current = false;
@@ -43,12 +49,16 @@ export function BottomNav() {
 
   useEffect(() => {
     if (!user) return;
+    // Don't poll when on activity page
+    if (location.pathname === '/activity') return;
     getUnreadNotificationsCount().then(setUnread);
     const interval = setInterval(() => {
-      getUnreadNotificationsCount().then(setUnread);
+      if (location.pathname !== '/activity') {
+        getUnreadNotificationsCount().then(setUnread);
+      }
     }, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, location.pathname]);
 
   // Hide on video page for true immersive TikTok experience
   if (location.pathname === '/videos') return null;
@@ -118,20 +128,20 @@ export function BottomNav() {
       >
         <div className="relative">
           <Icon
-            className={`h-[22px] w-[22px] transition-all duration-200 ${active ? 'scale-110' : ''}`}
-            strokeWidth={active ? 2.5 : 1.8}
+            className={`h-[19px] w-[19px] transition-all duration-200 ${active ? 'scale-105' : ''}`}
+            strokeWidth={active ? 2.4 : 1.7}
           />
           {badge > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
               {badge > 99 ? '99+' : badge}
             </span>
           )}
         </div>
-        <span className={`text-[10px] font-medium transition-colors leading-none ${active ? 'text-foreground' : ''}`}>
+        <span className={`text-[9.5px] font-medium transition-colors leading-none mt-px ${active ? 'text-foreground' : 'text-muted-foreground'}`}>
           {label}
         </span>
         {active && (
-          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-foreground rounded-t-full" />
+          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-foreground rounded-t-full" />
         )}
       </button>
     );
@@ -143,11 +153,11 @@ export function BottomNav() {
         className="fixed bottom-0 left-0 right-0 z-50 bg-background/96 backdrop-blur-xl border-t border-border/50 transition-transform duration-300 ease-in-out"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-          height: 'calc(56px + env(safe-area-inset-bottom, 0px))',
+          height: 'calc(52px + env(safe-area-inset-bottom, 0px))',
           transform: visible ? 'translateY(0)' : 'translateY(100%)',
         }}
       >
-        <div className="flex items-center h-14 max-w-2xl mx-auto px-1">
+        <div className="flex items-center h-[52px] max-w-2xl mx-auto px-2">
           {leftItems.map(item => (
             <NavButton key={item.label} {...item} />
           ))}
@@ -156,10 +166,10 @@ export function BottomNav() {
           <div className="flex flex-col items-center justify-center flex-shrink-0 px-3">
             <button
               onClick={() => setShowCreate(true)}
-              className="h-[46px] w-[46px] bg-foreground rounded-[14px] flex items-center justify-center shadow-lg transition-all active:scale-90 hover:opacity-85"
+              className="h-[40px] w-[40px] bg-foreground rounded-[11px] flex items-center justify-center shadow-md transition-all active:scale-90 hover:opacity-85"
               aria-label="Create thread"
             >
-              <PenSquare className="h-5 w-5 text-background" strokeWidth={2} />
+              <PenSquare className="h-[17px] w-[17px] text-background" strokeWidth={2} />
             </button>
           </div>
 
